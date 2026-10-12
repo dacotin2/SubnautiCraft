@@ -1,0 +1,25 @@
+# Builds
+mc/build/
+mc/.gradle/
+mc/out/
+subnautica/bin/
+subnautica/obj/
+
+# Minecraft dev run (test world, options, logs)
+mc/run/
+*.log
+
+# Python environment for the tools
+tools/.venv/
+__pycache__/
+
+# Frames and pictures the tools write
+*.npz
+mesh_*.png
+
+# Editors
+.idea/
+.vs/
+.vscode/
+*.iml
+*.user

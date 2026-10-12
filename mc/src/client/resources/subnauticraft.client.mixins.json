@@ -1,0 +1,7 @@
+{
+	"required": true,
+	"package": "dev.subnauticraft.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": ["CameraMixin", "ClientLevelMixin", "FogRendererMixin", "FramerateLimitTrackerMixin", "GameRendererMixin", "GlCommandEncoderMixin", "InputConstantsMixin", "KeyMappingAccessor", "LightmapMixin", "LivingEntityMixin", "LocalPlayerMixin", "MinecraftAttackMixin", "ModelBlockRendererMixin", "ScreenMixin", "ToastManagerMixin", "WaitingForPlayerChunkMixin", "WindowMixin"],
+	"injectors": { "defaultRequire": 1 }
+}
