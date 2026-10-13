@@ -55,6 +55,29 @@ namespace SubnautiCraft
         }
     }
 
+    /// <summary>
+    /// Some deaths skip damage altogether: running out of oxygen kills the diver outright (and a few other things).
+    /// Steve dies of it too, in Minecraft (drowned when it's the oxygen), so both games die and respawn together.
+    /// </summary>
+    [HarmonyPatch(typeof(LiveMixin), nameof(LiveMixin.Kill))]
+    internal static class RyleyKillPatch
+    {
+        private static void Prefix(LiveMixin __instance, DamageType damageType)
+        {
+            if (Player.main == null || __instance != Player.main.liveMixin || !__instance.IsAlive() || Bridge.KillingForSteve
+                || !(Bridge.SteveEngaged || Bridge.SteveDriving))
+            {
+                return;
+            }
+
+            bool drowned = Player.main.GetOxygenAvailable() <= 0.01f;
+            string kind = drowned ? "Drown" : damageType.ToString();
+            Plugin.Log.LogInfo($"the diver was killed outright ({kind}): so is Steve");
+            // far more than any health, in Subnautica points (Steve's share of it is still all his health)
+            Bridge.ForwardToSteve("hurt", kind, 100000f);
+        }
+    }
+
     /// <summary>First aid kits and the like heal Steve as much as they would heal the diver.</summary>
     [HarmonyPatch(typeof(LiveMixin), nameof(LiveMixin.AddHealth))]
     internal static class RyleyHealPatch

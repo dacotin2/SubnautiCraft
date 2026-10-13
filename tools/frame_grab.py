@@ -26,7 +26,8 @@ for attempt in range(100):
     base = header + stride * slot
     color = np.frombuffer(m[base:base + n], np.uint8).reshape(h, w, 4).copy()
     depth = np.frombuffer(m[base + n:base + 2 * n], np.float32).reshape(h, w).copy()
+    overlay = np.frombuffer(m[base + 2 * n:base + 3 * n], np.uint8).reshape(h, w, 4).copy()  # hand, hotbar, screens
     if struct.unpack_from("<q", m, d)[0] == seq:
         break
-np.savez(out, color=color, depth=depth, near=near, far=far, fov=fov, flags=flags, pos=pos, rot=rot)
+np.savez(out, color=color, depth=depth, overlay=overlay, near=near, far=far, fov=fov, flags=flags, pos=pos, rot=rot)
 print("frame", w, h, "near", near, "far", far, "fov", fov, "flags", flags, "valid", float((depth > 0).mean()))

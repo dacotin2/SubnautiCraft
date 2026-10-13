@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:titanium_ingot",
+    "subnauticraft:lithium",
+    "subnauticraft:lithium"
+  ],
+  "result": {
+    "id": "subnauticraft:plasteel_ingot"
+  }
+}

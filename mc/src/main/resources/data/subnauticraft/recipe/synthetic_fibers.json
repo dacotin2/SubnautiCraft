@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:fiber_mesh",
+    "subnauticraft:benzene"
+  ],
+  "result": {
+    "id": "subnauticraft:synthetic_fibers"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "subnauticraft:flashlight",
+    "subnauticraft:battery"
+  ],
+  "result": {
+    "id": "subnauticraft:flashlight"
+  }
+}

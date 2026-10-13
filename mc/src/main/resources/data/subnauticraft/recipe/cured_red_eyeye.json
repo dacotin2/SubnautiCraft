@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:red_eyeye",
+    "subnauticraft:salt_deposit"
+  ],
+  "result": {
+    "id": "subnauticraft:cured_red_eyeye"
+  }
+}

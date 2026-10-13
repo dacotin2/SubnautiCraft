@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:silver_ore",
+    "subnauticraft:silver_ore"
+  ],
+  "result": {
+    "id": "subnauticraft:wiring_kit"
+  }
+}

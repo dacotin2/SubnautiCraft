@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:gold",
+    "subnauticraft:hydrochloric_acid"
+  ],
+  "result": {
+    "id": "subnauticraft:polyaniline"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:blood_oil",
+    "subnauticraft:blood_oil",
+    "subnauticraft:blood_oil"
+  ],
+  "result": {
+    "id": "subnauticraft:benzene"
+  }
+}

@@ -46,6 +46,12 @@ public final class SnWater {
 		return h < 0.02 ? 0.0F : (float) Math.min(1.0, h);
 	}
 
+	/** How far below Subnautica's surface this height is (0 above it, or with no sea). */
+	public static double depthAbove(final double y) {
+		double s = surface;
+		return Double.isNaN(s) ? 0.0 : Math.max(0.0, s - y);
+	}
+
 	/** Any of this block is under Subnautica's sea: no fire there, and no pouring water into water. */
 	public static boolean under(final BlockPos pos) {
 		return depthIn(pos) > 0.0F;

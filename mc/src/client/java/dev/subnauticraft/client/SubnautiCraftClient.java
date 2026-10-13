@@ -2,9 +2,14 @@ package dev.subnauticraft.client;
 
 import dev.subnauticraft.SubnautiCraft;
 import dev.subnauticraft.WorldBridge;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -14,6 +19,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.client.tutorial.TutorialSteps;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.HolderSet;
@@ -30,10 +37,19 @@ import net.minecraft.world.level.levelgen.WorldOptions;
 import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.level.storage.LevelStorageSource;
+import org.jspecify.annotations.Nullable;
 
 public class SubnautiCraftClient implements ClientModInitializer {
-	/** The world Subnautica plays in: an empty (void) creative world, so only what the player builds is Minecraft. */
+	/**
+	 * The worlds Subnautica plays in, one per Subnautica save ("subnauticraft_slot0001"): empty (void) creative
+	 * worlds, so only what the player builds is Minecraft. Before saves had their own, there was one, "subnauticraft":
+	 * the first save played takes it over.
+	 */
 	private static final String WORLD = "subnauticraft";
+	/** The world for the Subnautica save being played; null until Subnautica says which (Minecraft waits on its title screen). */
+	private static volatile String wantedWorld;
 	/** Run on the server every time the player joins: world settings only (the starter items go once). */
 	private static final List<String> SETUP = List.of(
 		"gamerule advance_time false",
@@ -75,6 +91,8 @@ public class SubnautiCraftClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		HostLink.launch();
+		// Subnautica creatures' stand-ins are invisible: nothing of them in the picture
+		EntityRendererRegistry.register(dev.subnauticraft.SnCreatures.TYPE, NoopRenderer::new);
 		ClientTickEvents.END_CLIENT_TICK.register(SubnautiCraftClient::tick);
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayer player = handler.player;
@@ -111,9 +129,10 @@ public class SubnautiCraftClient implements ClientModInitializer {
 			configure(minecraft.options);
 		}
 
-		if (!worldRequested && minecraft.level == null && minecraft.gui.screen() instanceof TitleScreen && !Boolean.getBoolean("subnauticraft.noAutoWorld")) {
+		String wanted = wantedWorld;
+		if (!worldRequested && wanted != null && minecraft.level == null && minecraft.gui.screen() instanceof TitleScreen && !Boolean.getBoolean("subnauticraft.noAutoWorld")) {
 			worldRequested = true;
-			openWorld(minecraft);
+			openWorld(minecraft, wanted);
 		}
 	}
 
@@ -147,14 +166,58 @@ public class SubnautiCraftClient implements ClientModInitializer {
 		options.save();
 	}
 
-	private static void openWorld(final Minecraft minecraft) {
-		if (minecraft.getLevelSource().levelExists(WORLD)) {
-			SubnautiCraft.LOG.info("opening world {}", WORLD);
-			minecraft.createWorldOpenFlows().openWorld(WORLD, () -> minecraft.gui.setScreen(new TitleScreen()));
+	/**
+	 * Render thread: Subnautica is playing this save. Its world opens (made the first time); if another world is open,
+	 * Minecraft saves and leaves it first (the title screen then opens the right one).
+	 */
+	public static void useSave(final Minecraft minecraft, final String slot) {
+		String world = WORLD + "_" + slot.replaceAll("[^A-Za-z0-9_-]", "_");
+		if (world.equals(wantedWorld)) {
+			return;
+		}
+
+		wantedWorld = world;
+		worldRequested = false;
+		String open = openWorldId(minecraft);
+		if (open != null && !open.equals(world)) {
+			SubnautiCraft.LOG.info("Subnautica save {}: leaving world {} for {}", slot, open, world);
+			minecraft.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
+		} else if (open != null) {
+			worldRequested = true; // already in it
+		}
+	}
+
+	/** The folder name of the world being played here, or null. */
+	private static @Nullable String openWorldId(final Minecraft minecraft) {
+		IntegratedServer server = minecraft.getSingleplayerServer();
+		if (minecraft.level == null || server == null) {
+			return null;
+		}
+
+		Path root = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
+		return root.getFileName() != null ? root.getFileName().toString() : null;
+	}
+
+	private static void openWorld(final Minecraft minecraft, final String world) {
+		LevelStorageSource saves = minecraft.getLevelSource();
+		if (!saves.levelExists(world) && saves.levelExists(WORLD)) {
+			// the world from before saves had their own goes to the first save played
+			try {
+				Files.move(saves.getBaseDir().resolve(WORLD), saves.getBaseDir().resolve(world));
+				SubnautiCraft.LOG.info("world {} is now {}", WORLD, world);
+			} catch (IOException e) {
+				SubnautiCraft.LOG.warn("couldn't rename world {} to {}: {}", WORLD, world, e.toString());
+			}
+		}
+
+		if (saves.levelExists(world)) {
+			SubnautiCraft.LOG.info("opening world {}", world);
+			minecraft.createWorldOpenFlows().openWorld(world, () -> minecraft.gui.setScreen(new TitleScreen()));
 		} else {
-			SubnautiCraft.LOG.info("creating world {}", WORLD);
-			LevelSettings settings = new LevelSettings("SubnautiCraft", GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true, WorldDataConfiguration.DEFAULT);
-			minecraft.createWorldOpenFlows().createFreshLevel(WORLD, settings, new WorldOptions(0L, false, false), SubnautiCraftClient::voidWorld, minecraft.gui.screen());
+			SubnautiCraft.LOG.info("creating world {}", world);
+			String name = "SubnautiCraft " + world.substring(WORLD.length() + 1);
+			LevelSettings settings = new LevelSettings(name, GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true, WorldDataConfiguration.DEFAULT);
+			minecraft.createWorldOpenFlows().createFreshLevel(world, settings, new WorldOptions(0L, false, false), SubnautiCraftClient::voidWorld, minecraft.gui.screen());
 		}
 	}
 

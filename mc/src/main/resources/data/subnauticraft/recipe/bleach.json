@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:salt_deposit",
+    "subnauticraft:coral_tube_sample"
+  ],
+  "result": {
+    "id": "subnauticraft:bleach"
+  }
+}

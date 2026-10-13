@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:glass",
+    "subnauticraft:stalker_tooth"
+  ],
+  "result": {
+    "id": "subnauticraft:enameled_glass"
+  }
+}

@@ -62,7 +62,9 @@ namespace SubnautiCraft
                 return true;
             }
 
-            return !live.weldable && live.knifeable && live.GetComponent<EscapePod>() == null && live.gameObject != Player.main.gameObject;
+            // a Minecraft mob's body: Steve's sword hits the mob itself in Minecraft
+            return !live.weldable && live.knifeable && live.GetComponent<EscapePod>() == null && live.gameObject != Player.main.gameObject
+                && live.GetComponent<McMobProxy>() == null;
         }
 
         /// <summary>The knife's harvest: creepvine seeds, coral samples and the like go into the inventory.</summary>

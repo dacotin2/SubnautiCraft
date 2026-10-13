@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:table_coral_sample",
+    "subnauticraft:table_coral_sample",
+    "subnauticraft:gold",
+    "subnauticraft:copper_wire"
+  ],
+  "result": {
+    "id": "subnauticraft:computer_chip"
+  }
+}

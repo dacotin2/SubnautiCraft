@@ -28,6 +28,8 @@ namespace SubnautiCraft
         public static bool SteveDriving;
         /// <summary>A Minecraft screen (inventory, chat, pause) is open: the cursor is Minecraft's.</summary>
         public static bool McScreenOpen;
+        /// <summary>How fast Steve moves (m/s): Subnautica's hunters go for moving prey.</summary>
+        public static float SteveSpeed => SteveEngaged && instance != null ? instance.povVelocity.magnitude : 0f;
 
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
         private const float StaleSeconds = 3f;
@@ -51,6 +53,14 @@ namespace SubnautiCraft
         private int sentW, sentH;
         private int sentHud = -1;
         private int sentUnlit = -1;
+        private bool iconsSent;
+        private string sentSlot;
+        private readonly ToolLight toolLight = new ToolLight();
+        private readonly HostileCreatures hostiles = new HostileCreatures();
+        private readonly Lifepod lifepod = new Lifepod();
+        private readonly MobProxies mobProxies = new MobProxies();
+        private readonly SnScanner scanner = new SnScanner();
+        private bool knownSent;
         private readonly List<Vector3Int> emitters = new List<Vector3Int>();
         private int sentMode = -1;
         private float sentFov = -1f;
@@ -68,13 +78,19 @@ namespace SubnautiCraft
         private string lastPovJson;
         private double povArrival;
         private Vector3 povCamera;
+        /// <summary>Which way Minecraft's camera faces (in third person it orbits Steve, or faces him with F5 twice).</summary>
+        private Quaternion povLook = Quaternion.identity;
         private Vector3 povFeet;
+        /// <summary>Steve's eyes (not the camera: in F5 it's behind him), where the diver's head goes.</summary>
+        private Vector3 povEye;
         private Vector3 povVelocity;
         private bool povThirdPerson;
         private float povHealth, povMaxHealth;
         private bool povDead;
         private int povPlayerId = -1;
         private int povTerrainBacklog;
+        /// <summary>The Subnautica tool in Steve's hand, if its battery has charge ("flashlight", "seaglide").</summary>
+        private string povTool;
         /// <summary>The Minecraft player object Steve mode is following (a new one after a respawn waits at the world spawn).</summary>
         private int followedPlayerId = -1;
         private bool killedRyley;
@@ -109,11 +125,13 @@ namespace SubnautiCraft
             input = new InputForwarder { TrySubnauticaUse = TrySubnauticaUse };
             puppet = new RyleyPuppet();
             Camera.onPreCull += OnPreCullCamera;
+            Camera.onPostRender += OnPostRenderCamera;
         }
 
         private void OnDestroy()
         {
             Camera.onPreCull -= OnPreCullCamera;
+            Camera.onPostRender -= OnPostRenderCamera;
             link?.Dispose();
             reader?.Dispose();
         }
@@ -160,10 +178,14 @@ namespace SubnautiCraft
                 seenConnections = link.Connections;
                 sentW = sentH = 0;
                 sentHud = sentMode = sentPause = sentUnlit = -1;
+                iconsSent = false;
+                knownSent = false;
+                sentSlot = null;
                 sentFov = -1f;
                 terrain.Reset();
                 blocks.Clear();
                 lights.Clear();
+                mobProxies.Clear();
                 lastBlockSync = new Vector3(float.NaN, 0f, 0f);
                 hasPov = false;
                 Disengage();
@@ -253,6 +275,31 @@ namespace SubnautiCraft
             }
 
             SendView();
+            string slot = SaveLoadManager.main != null ? SaveLoadManager.main.GetCurrentSlot() : null;
+            if (!string.IsNullOrEmpty(slot) && slot != sentSlot)
+            {
+                // each Subnautica save has its own Minecraft world (Minecraft switches to it, or makes it)
+                sentSlot = slot;
+                link.Send("{\"t\":\"save\",\"slot\":\"" + slot.Replace("\"", "") + "\"}");
+                Plugin.Log.LogInfo($"playing save {slot}: Minecraft opens its world");
+            }
+
+            if (!knownSent && Language.main != null && Player.main != null)
+            {
+                // the blueprints the diver knows are the recipes Minecraft lets Steve craft
+                knownSent = true;
+                Blueprints.SendAll(link);
+                // and the rest of the fabricator's recipes, with whatever has no Minecraft item of its own
+                StartCoroutine(SnRecipes.Send(link));
+            }
+
+            if (!iconsSent && SpriteManager.hasInitialized && Language.main != null)
+            {
+                // Subnautica's materials are Minecraft items too: their icons and names come from this game
+                iconsSent = true;
+                StartCoroutine(SnItems.SendIcons(link));
+            }
+
             int unlit = McLayer.LitBySubnautica ? 1 : 0;
             if (unlit != sentUnlit)
             {
@@ -308,11 +355,16 @@ namespace SubnautiCraft
                     Plugin.Log.LogInfo($"state: placing {teleportPending}, paused {sentPause == 1}, hud {(sentHud == 0 ? "on" : "off")}, Subnautica UI {subnauticaUi}, " +
                         $"Minecraft screen {McScreenOpen}, pov age {HostLink.Now - povArrival:F2} s, frame age {Time.unscaledTime - lastFrameTime:F2} s, " +
                         $"Steve {povFeet} hp {povHealth:F1}, diver {player.transform.position}, outbox {link.Pending}");
+                    Plugin.Log.LogInfo("prey: " + PreyReport.Describe(player));
                 }
             }
 
             Vector3 at = cam.transform.position;
             terrain.Tick(link, at);
+            // Subnautica's creatures and Minecraft's mobs: each game sees the other's, and they fight; every biter goes
+            // for Steve (in Steve mode) and for the mobs, with its own bite
+            mobProxies.Report(link, at);
+            hostiles.Tick(player, mobProxies, SteveEngaged);
             lights.Update(at, true);
             if (float.IsNaN(lastBlockSync.x) || (at - lastBlockSync).sqrMagnitude > 48f * 48f)
             {
@@ -349,6 +401,8 @@ namespace SubnautiCraft
             }
 
             SteveEngaged = false;
+            toolLight.Update(null, Vector3.zero, Quaternion.identity);
+            lifepod.Release();
             BlockGameInput = false;
             McScreenOpen = false;
             FreeCursor(false);
@@ -359,9 +413,33 @@ namespace SubnautiCraft
             Plugin.Log.LogInfo("Ryley mode: Subnautica plays");
         }
 
-        private void SendTeleport(Vector3 feet, Quaternion look)
+        /// <summary>Minecraft is there to talk to.</summary>
+        public static bool Connected => instance != null && instance.link.Connected;
+
+        /// <summary>Something for the diver's inventory: Steve's Minecraft inventory gets it instead (StevePickupPatch).</summary>
+        public static bool GiveToSteve(Pickupable pickupable)
         {
-            if (hasPov && !povDead && (povFeet - feet).sqrMagnitude < 2.5f * 2.5f)
+            return Connected && SnItems.Give(pickupable, instance.link);
+        }
+
+        /// <summary>Subnautica moved the diver on purpose (a hatch): Steve goes there, however close it is.</summary>
+        public static void SendSteveToDiver(string why)
+        {
+            Bridge b = instance;
+            if (b == null || !SteveEngaged || Player.main == null)
+            {
+                return;
+            }
+
+            Plugin.Log.LogInfo($"{why}: Steve goes where the diver is");
+            Camera cam = MainCam;
+            b.SendTeleport(Player.main.transform.position + b.puppet.EyeOffset - new Vector3(0f, SteveEyeHeight, 0f),
+                cam != null ? cam.transform.rotation : Quaternion.identity, true);
+        }
+
+        private void SendTeleport(Vector3 feet, Quaternion look, bool force = false)
+        {
+            if (!force && hasPov && !povDead && (povFeet - feet).sqrMagnitude < 2.5f * 2.5f)
             {
                 return; // Steve is already there: no need to stop the game to place him
             }
@@ -412,7 +490,7 @@ namespace SubnautiCraft
                 {
                     killedRyley = true;
                     Plugin.Log.LogInfo("Steve died: so does the diver");
-                    Player.main.liveMixin.Kill();
+                    KillDiverForSteve();
                 }
 
                 return;
@@ -448,11 +526,43 @@ namespace SubnautiCraft
                 live.health = Mathf.Max(0.5f, povHealth / povMaxHealth * live.maxHealth);
             }
 
-            Vector3 eye = povThirdPerson ? povFeet + new Vector3(0f, SteveEyeHeight, 0f) : povCamera;
+            Vector3 eye = povEye;
             if (!puppet.Follow(eye))
             {
                 // Subnautica moved the diver itself (respawn, warp, ladder): Steve goes there
-                SendTeleport(cam.transform.position - new Vector3(0f, SteveEyeHeight, 0f), cam.transform.rotation);
+                SendTeleport(Player.main.transform.position + puppet.EyeOffset - new Vector3(0f, SteveEyeHeight, 0f), cam.transform.rotation);
+            }
+
+            // the diver moves as fast as Steve: the noise he makes (creatures hear it) and the speed hunters look for
+            Player.main.playerController.velocity = povVelocity;
+            LeaveLifepod(Player.main, eye);
+            // the lifepod holds still while Steve is near it (he and the diver kept pushing it)
+            lifepod.Tick(Player.main, true);
+            // the scanner in Steve's hand scans what he holds right click on; cinematics he set off finish at once
+            scanner.Tick(povTool, McScreenOpen, link);
+            Cinematics.Tick();
+            // the diver carries nothing while Steve plays: what he had (or got some other way) goes to Steve
+            SnItems.EmptyDiver(link);
+            // the flashlight or Seaglide in Steve's hand lights the way he looks
+            toolLight.Update(povDead || teleportPending ? null : povTool, eye, cam.transform.rotation);
+        }
+
+        /// <summary>
+        /// Subnautica only clears "in the lifepod" when you climb out through a hatch, or 15 m away: Steve swims out,
+        /// and until then he counted as indoors (dry for Minecraft, and no creature would attack him).
+        /// </summary>
+        private static void LeaveLifepod(Player player, Vector3 steveEye)
+        {
+            EscapePod pod = player.currentEscapePod != null ? player.currentEscapePod : EscapePod.main;
+            if (!player.escapePod.value || pod == null || pod.playerSpawn == null)
+            {
+                return;
+            }
+
+            if ((steveEye - pod.playerSpawn.position).sqrMagnitude > 3.5f * 3.5f)
+            {
+                EnterExitHelper.Exit(pod.transform, player, true, false);
+                Plugin.Log.LogInfo("Steve swam out of the lifepod");
             }
         }
 
@@ -472,6 +582,19 @@ namespace SubnautiCraft
         }
 
         /// <summary>Just before Subnautica's main camera renders: Steve mode puts it at Minecraft's camera; Ryley mode sends it to Minecraft. Then the newest picture is shown.</summary>
+        private Transform restoreCamera;
+        private Quaternion restoreRotation;
+
+        /// <summary>After the third-person frame: Subnautica's camera faces where it did (its look is Steve's look).</summary>
+        private void OnPostRenderCamera(Camera cam)
+        {
+            if (restoreCamera != null && cam == MainCam)
+            {
+                restoreCamera.rotation = restoreRotation;
+                restoreCamera = null;
+            }
+        }
+
         private void OnPreCullCamera(Camera cam)
         {
             if (!active || cam != MainCam || Time.frameCount == lastPreCullFrame)
@@ -485,7 +608,16 @@ namespace SubnautiCraft
                 Transform t = cam.transform;
                 if (SteveEngaged)
                 {
-                    if (hasPov && !teleportPending && !povDead)
+                    if (hasPov && !teleportPending && !povDead && povThirdPerson)
+                    {
+                        // F5: exactly Minecraft's camera, position and direction (behind Steve, or facing him), so
+                        // Steve's body in Minecraft's picture sits still on screen; Subnautica's own camera direction
+                        // (where Steve looks) comes back after this frame is drawn
+                        restoreRotation = t.rotation;
+                        restoreCamera = t;
+                        t.SetPositionAndRotation(povCamera, povLook);
+                    }
+                    else if (hasPov && !teleportPending && !povDead)
                     {
                         // Minecraft's camera, carried forward by Steve's velocity to this frame (the two games' frames
                         // don't line up); the rotation is Subnautica's own (it's where Steve looks)
@@ -588,12 +720,23 @@ namespace SubnautiCraft
         /// <summary>Right click on something Subnautica's hand can use: Subnautica uses it (the same as its own click).</summary>
         private static bool TrySubnauticaUse()
         {
+            if (instance != null && instance.povTool == "scanner")
+            {
+                return false; // right click is the scanner's (SnScanner)
+            }
+
             Player player = Player.main;
             GUIHand hand = player != null ? player.guiHand : null;
             GameObject target = hand != null ? hand.GetActiveTarget() : null;
             if (target == null || !player.IsFreeToInteract())
             {
                 return false;
+            }
+
+            // a locker, the fabricator or the vehicle bay: Minecraft's screen for it
+            if (instance != null && instance.link.Connected && SnMenus.TryOpen(target, instance.link))
+            {
+                return true;
             }
 
             GUIHand.Send(target, HandTargetEventType.Click, hand);
@@ -631,7 +774,16 @@ namespace SubnautiCraft
             float[] feet = m["f"].ToObject<float[]>();
             float[] v = m["v"]?.ToObject<float[]>() ?? new float[3];
             povCamera = Coords.FromMc(p[0], p[1], p[2]);
+            float[] r = m["r"]?.ToObject<float[]>();
+            if (r != null && r.Length >= 2)
+            {
+                povLook = Coords.Rotation(r[0], r[1], 0f);
+            }
+
             povFeet = Coords.FromMc(feet[0], feet[1], feet[2]);
+            float[] eyeAt = m["e"]?.ToObject<float[]>();
+            povEye = eyeAt != null && eyeAt.Length >= 3 ? Coords.FromMc(eyeAt[0], eyeAt[1], eyeAt[2])
+                : povThirdPerson ? povFeet + new Vector3(0f, SteveEyeHeight, 0f) : povCamera;
             povVelocity = new Vector3(-v[0], v[1], v[2]);
             povArrival = link.LatestPovTime;
             povThirdPerson = (bool)m["tp"];
@@ -641,7 +793,34 @@ namespace SubnautiCraft
             povDead = m["dead"] != null && (bool)m["dead"];
             povPlayerId = m["pid"] != null ? (int)m["pid"] : 0;
             povTerrainBacklog = m["tq"] != null ? (int)m["tq"] : 0;
+            povTool = (string)m["tool"];
             hasPov = true;
+        }
+
+        /// <summary>A Subnautica creature bit a Minecraft mob's body: the mob takes it (Minecraft health points).</summary>
+        public static void ForwardMobHit(int entityId, float minecraftDamage)
+        {
+            Bridge b = instance;
+            if (b != null && b.link.Connected)
+            {
+                b.link.Send("{\"t\":\"mobhit\",\"id\":" + entityId.ToString(Inv) + ",\"dmg\":" + minecraftDamage.ToString("F2", Inv) + "}");
+            }
+        }
+
+        /// <summary>Set while the diver dies because Steve did: that death is not news to Minecraft.</summary>
+        public static bool KillingForSteve;
+
+        private static void KillDiverForSteve()
+        {
+            KillingForSteve = true;
+            try
+            {
+                Player.main.liveMixin.Kill();
+            }
+            finally
+            {
+                KillingForSteve = false;
+            }
         }
 
         /// <summary>The diver's damage or healing, for Steve (Minecraft health points: Subnautica's times DamageScale).</summary>
@@ -685,6 +864,33 @@ namespace SubnautiCraft
                     }
 
                     break;
+                case "build":
+                    SnMenus.Build((string)m["id"], (string)m["tech"], link);
+                    break;
+                case "mobs":
+                    mobProxies.Apply(m["m"].ToObject<float[][]>());
+                    break;
+                case "creaturehit":
+                    mobProxies.CreatureHit((int)m["id"], (float)m["dmg"]);
+                    break;
+                case "ate":
+                    if (m["tech"] != null && TechTypeExtensions.FromString((string)m["tech"], out TechType eaten, true))
+                    {
+                        // one of Subnautica's own foods or drinks (a nutrient block, a water bottle): exactly what it gives the diver
+                        string what = (string)m["tech"];
+                        StartCoroutine(SnItems.EatValues(eaten, values => Feed(what, 0, values.x, values.y)));
+                    }
+                    else
+                    {
+                        Feed((string)m["item"], m["n"] != null ? (int)m["n"] : 0, m["food"] != null ? (float?)m["food"] : null, m["water"] != null ? (float)m["water"] : 0f);
+                    }
+
+                    break;
+                case "drop":
+                case "place":
+                    // Steve dropped or placed one of Subnautica's things: the real thing comes out in Subnautica's world
+                    StartCoroutine(SnItems.DropFromSteve((string)m["item"], (string)m["tech"], m["n"] != null ? (int)m["n"] : 1, (string)m["t"] == "place"));
+                    break;
                 case "lights":
                     lights.Apply(m);
                     break;
@@ -700,7 +906,7 @@ namespace SubnautiCraft
                     {
                         killedRyley = true;
                         Plugin.Log.LogInfo("Steve died: so does the diver");
-                        Player.main.liveMixin.Kill();
+                        KillDiverForSteve();
                     }
 
                     break;
@@ -708,6 +914,44 @@ namespace SubnautiCraft
                     SwordStrike.Swing(m["dmg"] != null ? (float)m["dmg"] : 7f);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Steve ate: the diver's food bar fills as much (Minecraft's 20 points are Subnautica's 100; like Subnautica,
+        /// a hungry diver can eat past full). Bladderfish also quench thirst, as in Subnautica.
+        /// </summary>
+        private static void Feed(string item, int nutrition, float? food, float water)
+        {
+            Survival survival = Player.main != null ? Player.main.GetComponent<Survival>() : null;
+            if (survival == null)
+            {
+                return;
+            }
+
+            if (food.HasValue)
+            {
+                survival.food = Mathf.Clamp(survival.food + food.Value, 0f, 200f);
+                survival.water = Mathf.Clamp(survival.water + water, 0f, 100f);
+                Plugin.Log.LogInfo($"Steve ate {item}: diver's food {survival.food:F0}, water {survival.water:F0}");
+                return;
+            }
+
+            if (nutrition <= 0)
+            {
+                return;
+            }
+
+            if (survival.food <= 99f)
+            {
+                survival.food = Mathf.Clamp(survival.food + nutrition * 5f, 0f, 200f);
+            }
+
+            if (item != null && item.Contains("bladderfish"))
+            {
+                survival.water = Mathf.Clamp(survival.water + nutrition * 5f, 0f, 100f);
+            }
+
+            Plugin.Log.LogInfo($"Steve ate {item}: diver's food {survival.food:F0}, water {survival.water:F0}");
         }
 
         /// <summary>TNT and creepers hurt what's around them in Subnautica too (including you).</summary>

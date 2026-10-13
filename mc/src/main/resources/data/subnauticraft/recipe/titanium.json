@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:scrap_metal"
+  ],
+  "result": {
+    "id": "subnauticraft:titanium",
+    "count": 4
+  }
+}

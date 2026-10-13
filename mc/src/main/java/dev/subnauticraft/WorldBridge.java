@@ -99,6 +99,28 @@ public final class WorldBridge {
 		});
 	}
 
+	/** Server thread: something for the server. */
+	public static void withServer(final java.util.function.Consumer<MinecraftServer> task) {
+		MinecraftServer s = server;
+		if (s != null) {
+			s.execute(() -> task.accept(s));
+		}
+	}
+
+	/** Server thread: something for the player (single player: the one there is). */
+	public static void withPlayer(final java.util.function.Consumer<ServerPlayer> task) {
+		MinecraftServer s = server;
+		if (s == null) {
+			return;
+		}
+
+		s.execute(() -> {
+			if (!s.getPlayerList().getPlayers().isEmpty()) {
+				task.accept(s.getPlayerList().getPlayers().get(0));
+			}
+		});
+	}
+
 	/** Run a command as the server (op). Results go to the log, not to chat (send_command_feedback is off). */
 	public static void command(final String command) {
 		MinecraftServer s = server;

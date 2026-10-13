@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:hoverfish",
+    "subnauticraft:salt_deposit"
+  ],
+  "result": {
+    "id": "subnauticraft:cured_hoverfish"
+  }
+}

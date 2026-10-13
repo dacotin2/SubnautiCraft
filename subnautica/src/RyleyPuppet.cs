@@ -12,15 +12,21 @@ namespace SubnautiCraft
     {
         private readonly List<Renderer> hidden = new List<Renderer>();
         private float nextHideScan;
-        /// <summary>The diver's origin relative to his eyes, measured when Steve took over.</summary>
-        private Vector3 fromEye = new Vector3(0f, -1.6f, 0f);
+        /// <summary>
+        /// The diver's origin relative to his eyes: Subnautica keeps it at his head (it decides "under water" there).
+        /// Fixed, not measured when Steve takes over: taken during a cinematic or a ladder it came out a metre and a half
+        /// off, and the game then thought the diver was far below Steve (breathing, the lifepod, the depth).
+        /// </summary>
+        private readonly Vector3 fromEye = new Vector3(0f, -0.05f, 0f);
         private Vector3 lastSet;
         private bool hasLastSet;
+
+        /// <summary>Where the eyes are relative to the diver's origin.</summary>
+        public Vector3 EyeOffset => -fromEye;
 
         public void TakeOver(Camera camera)
         {
             Player player = Player.main;
-            fromEye = player.transform.position - camera.transform.position;
             hasLastSet = false;
             Freeze(player);
             Hide(player);

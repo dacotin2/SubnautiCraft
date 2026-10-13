@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:smoking",
+  "category": "food",
+  "cookingtime": 100,
+  "experience": 0.35,
+  "ingredient": "subnauticraft:red_eyeye",
+  "result": {
+    "id": "subnauticraft:cooked_red_eyeye"
+  }
+}

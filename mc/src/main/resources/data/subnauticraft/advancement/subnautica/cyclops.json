@@ -1,0 +1,27 @@
+{
+  "parent": "subnauticraft:subnautica/root",
+  "criteria": {
+    "learned": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "icon": {
+      "id": "subnauticraft:cyclops"
+    },
+    "title": {
+      "translate": "item.subnauticraft.cyclops"
+    },
+    "description": {
+      "translate": "advancements.subnauticraft.vehicle"
+    },
+    "frame": "goal",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "requirements": [
+    [
+      "learned"
+    ]
+  ]
+}

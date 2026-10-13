@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:battery",
+    "subnauticraft:lubricant",
+    "subnauticraft:copper_wire",
+    "subnauticraft:titanium"
+  ],
+  "result": {
+    "id": "subnauticraft:seaglide"
+  }
+}

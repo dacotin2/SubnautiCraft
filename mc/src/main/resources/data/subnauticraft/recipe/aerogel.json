@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:ruby",
+    "subnauticraft:gel_sack"
+  ],
+  "result": {
+    "id": "subnauticraft:aerogel"
+  }
+}

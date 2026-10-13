@@ -109,12 +109,15 @@ abstract class CameraMixin {
 		// which player object this is (a respawn makes a new one, with the same entity id, at the world spawn until
 		// Subnautica places it)
 		Vec3 feet = player.getPosition(deltaTracker.getGameTimeDeltaPartialTick(true));
+		// his eyes, wherever the camera is (F5) and however he stands (swimming, crouching): where the diver's head goes
+		Vec3 eye = player.getEyePosition(deltaTracker.getGameTimeDeltaPartialTick(true));
 		Vec3 v = player.getDeltaMovement().scale(20.0);
 		boolean screen = minecraft.gui.screen() != null && !HostState.hostPaused;
 		SubnautiCraft.events.accept(String.format(Locale.ROOT,
-			"{\"t\":\"pov\",\"p\":[%.4f,%.4f,%.4f],\"r\":[%.3f,%.3f],\"f\":[%.4f,%.4f,%.4f],\"v\":[%.3f,%.3f,%.3f],\"scr\":%b,\"tp\":%b,\"sw\":%b,\"fly\":%b,\"hp\":%.2f,\"hpMax\":%.2f,\"dead\":%b,\"pid\":%d,\"tq\":%d}",
+			"{\"t\":\"pov\",\"p\":[%.4f,%.4f,%.4f],\"r\":[%.3f,%.3f],\"f\":[%.4f,%.4f,%.4f],\"v\":[%.3f,%.3f,%.3f],\"scr\":%b,\"tp\":%b,\"sw\":%b,\"fly\":%b,\"hp\":%.2f,\"hpMax\":%.2f,\"dead\":%b,\"pid\":%d,\"tq\":%d,\"tool\":\"%s\",\"e\":[%.4f,%.4f,%.4f]}",
 			at.x, at.y, at.z, this.yRot, this.xRot, feet.x, feet.y, feet.z, v.x, v.y, v.z, screen, this.detached,
 			player.isInWater(), player.getAbilities().flying, player.getHealth(), player.getMaxHealth(), player.isDeadOrDying(), System.identityHashCode(player),
-			dev.subnauticraft.world.SnCollision.pending()));
+			dev.subnauticraft.world.SnCollision.pending(), java.util.Objects.requireNonNullElse(dev.subnauticraft.SnTools.working(player.getMainHandItem()), ""),
+			eye.x, eye.y, eye.z));
 	}
 }

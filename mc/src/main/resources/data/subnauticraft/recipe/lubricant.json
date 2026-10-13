@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:creepvine_seed_cluster",
+    "minecraft:glass_bottle"
+  ],
+  "result": {
+    "id": "subnauticraft:lubricant"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:copper_ore",
+    "subnauticraft:copper_ore"
+  ],
+  "result": {
+    "id": "subnauticraft:copper_wire"
+  }
+}

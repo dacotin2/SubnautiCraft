@@ -1,0 +1,27 @@
+{
+  "parent": "subnauticraft:subnautica/root",
+  "criteria": {
+    "learned": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "display": {
+    "icon": {
+      "id": "subnauticraft:computer_chip"
+    },
+    "title": {
+      "translate": "item.subnauticraft.computer_chip"
+    },
+    "description": {
+      "translate": "advancements.subnauticraft.blueprint"
+    },
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "requirements": [
+    [
+      "learned"
+    ]
+  ]
+}

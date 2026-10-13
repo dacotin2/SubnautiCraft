@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:battery",
+    "subnauticraft:battery",
+    "subnauticraft:silicone_rubber"
+  ],
+  "result": {
+    "id": "subnauticraft:power_cell"
+  }
+}

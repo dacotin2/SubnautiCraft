@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:creepvine_sample",
+    "subnauticraft:creepvine_sample"
+  ],
+  "result": {
+    "id": "subnauticraft:fiber_mesh"
+  }
+}

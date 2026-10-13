@@ -11,8 +11,9 @@ namespace SubnautiCraft
     /// included, so cave ceilings, overhangs and cliff walls are found too), and every hit becomes a small patch
     /// lying on the surface. Minecraft turns the patches into collision (Steve walks on the island, bumps into
     /// rock) and crosshair targets (blocks go on the ground). It doesn't depend on reading Subnautica's meshes
-    /// (its pooled terrain meshes couldn't be read), and it covers terrain plus static scenery: wrecks, big rocks,
-    /// bases. Creatures, items, vehicles, plants and Minecraft's own blocks are left out.
+    /// (its pooled terrain meshes couldn't be read), and it covers what the diver himself bumps into: terrain, wrecks,
+    /// big rocks, bases, Precursor buildings. Creatures, items, vehicles, plants and Minecraft's own blocks are left out.
+    /// The lifepod and the Cyclops float and move: the regions around them are probed again twice a second.
     /// </summary>
     internal sealed class TerrainExporter
     {
@@ -30,7 +31,17 @@ namespace SubnautiCraft
             public float NextScan;
             public float LastProbe;
             public int Hits = -1;
+            /// <summary>Something that moves (the lifepod, a Cyclops) is in this region: probe it often, send it when it changed.</summary>
+            public bool Moving;
+            /// <summary>What was last sent (the patches, to the centimetre).</summary>
+            public int Hash;
         }
+
+        private const float MovingInterval = 0.5f;
+        private readonly HashSet<long> moving = new HashSet<long>();
+        private readonly List<Collider> bodyColliders = new List<Collider>();
+        private SubRoot[] subs = new SubRoot[0];
+        private float nextMovingScan, nextSubSearch;
 
         /// <summary>Every region within <paramref name="radius"/> of <paramref name="center"/> is known to Minecraft (empty ones probed again since <paramref name="since"/>).</summary>
         public bool CoveredAround(Vector3 center, float radius, float since)
@@ -88,7 +99,15 @@ namespace SubnautiCraft
 
             if (mask == 0)
             {
-                mask = (1 << LayerID.TerrainCollider) | (1 << LayerID.Default);
+                // whatever the diver collides with (structures sit on several layers), but not the diver himself
+                mask = (LayerID.GetAllCollisionsMask(LayerID.Player) | (1 << LayerID.TerrainCollider) | (1 << LayerID.Default))
+                    & ~(1 << LayerID.Player) & ~(1 << LayerID.Trigger) & ~(1 << LayerID.UI);
+            }
+
+            if (Time.unscaledTime >= nextMovingScan)
+            {
+                nextMovingScan = Time.unscaledTime + MovingInterval;
+                TrackMoving(center, radius);
             }
 
             if (float.IsNaN(lastEvict.x) || (center - lastEvict).sqrMagnitude > EvictMove * EvictMove)
@@ -196,16 +215,117 @@ namespace SubnautiCraft
             state.LastProbe = Time.unscaledTime;
             float distance = (RegionCenter(key) - player).magnitude;
             // empty regions are probed again soon (Subnautica builds colliders only near the player); full ones now and then
-            state.NextScan = Time.unscaledTime + (hits == 0 ? 2f : distance < 16f ? 6f : 20f);
-            if (hits == state.Hits)
+            state.NextScan = Time.unscaledTime + (state.Moving ? MovingInterval : hits == 0 ? 2f : distance < 16f ? 6f : 20f);
+            int hash = 17;
+            foreach (Vector3 v in patches)
+            {
+                hash = hash * 31 + Mathf.RoundToInt(v.x * 100f);
+                hash = hash * 31 + Mathf.RoundToInt(v.y * 100f);
+                hash = hash * 31 + Mathf.RoundToInt(v.z * 100f);
+            }
+
+            if (hits == state.Hits && (!state.Moving || hash == state.Hash))
+            {
+                return; // nothing new: Minecraft has it already
+            }
+
+            state.Hits = hits;
+            state.Hash = hash;
+            link.SendBinary(Encode(key));
+            SentRegions++;
+            SentTriangles += hits * 2;
+        }
+
+        /// <summary>
+        /// The regions the lifepod and any Cyclops near the player overlap now are probed every half second; a region
+        /// one of them has just left is probed once more, so the collision doesn't stay where it was.
+        /// </summary>
+        private void TrackMoving(Vector3 center, int radius)
+        {
+            if (Time.unscaledTime >= nextSubSearch)
+            {
+                nextSubSearch = Time.unscaledTime + 3f;
+                subs = Object.FindObjectsOfType<SubRoot>();
+            }
+
+            var now = new HashSet<long>();
+            if (EscapePod.main != null)
+            {
+                AddMoving(EscapePod.main.gameObject, center, radius, now);
+            }
+
+            foreach (SubRoot sub in subs)
+            {
+                if (sub != null && !sub.isBase)
+                {
+                    AddMoving(sub.gameObject, center, radius, now);
+                }
+            }
+
+            foreach (long key in moving)
+            {
+                if (!now.Contains(key) && regions.TryGetValue(key, out RegionState left))
+                {
+                    left.Moving = false;
+                    left.Hits = -1;
+                    left.NextScan = 0f;
+                }
+            }
+
+            moving.Clear();
+            moving.UnionWith(now);
+        }
+
+        private void AddMoving(GameObject body, Vector3 center, int radius, HashSet<long> into)
+        {
+            bodyColliders.Clear();
+            body.GetComponentsInChildren(false, bodyColliders);
+            bool any = false;
+            Bounds bounds = default;
+            foreach (Collider c in bodyColliders)
+            {
+                if (c.enabled && !c.isTrigger)
+                {
+                    if (!any)
+                    {
+                        bounds = c.bounds;
+                        any = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(c.bounds);
+                    }
+                }
+            }
+
+            if (!any || (bounds.center - center).sqrMagnitude > (radius + 32f) * (radius + 32f) || bounds.size.magnitude > 200f)
             {
                 return;
             }
 
-            state.Hits = hits;
-            link.SendBinary(Encode(key));
-            SentRegions++;
-            SentTriangles += hits * 2;
+            bounds.Expand(1f);
+            for (int x = Mathf.FloorToInt(bounds.min.x / Region); x <= Mathf.FloorToInt(bounds.max.x / Region); x++)
+            {
+                for (int y = Mathf.FloorToInt(bounds.min.y / Region); y <= Mathf.FloorToInt(bounds.max.y / Region); y++)
+                {
+                    for (int z = Mathf.FloorToInt(bounds.min.z / Region); z <= Mathf.FloorToInt(bounds.max.z / Region); z++)
+                    {
+                        long key = Key(x, y, z);
+                        into.Add(key);
+                        if (!regions.TryGetValue(key, out RegionState state))
+                        {
+                            state = new RegionState();
+                            regions[key] = state;
+                        }
+
+                        if (!state.Moving)
+                        {
+                            state.Moving = true;
+                            state.NextScan = 0f;
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>Every surface the line crosses inside the region (front and back faces), as patches.</summary>
@@ -253,6 +373,23 @@ namespace SubnautiCraft
 
         private static bool IsWorld(Collider collider)
         {
+            if (BlockColliders.Owns(collider))
+            {
+                return false;
+            }
+
+            // the lifepod and the Cyclops are solid even though they float (and have health)
+            if (collider.GetComponentInParent<EscapePod>() != null)
+            {
+                return true;
+            }
+
+            SubRoot sub = collider.GetComponentInParent<SubRoot>();
+            if (sub != null && !sub.isBase)
+            {
+                return collider.GetComponentInParent<Vehicle>() == null;
+            }
+
             if (collider.attachedRigidbody != null && !collider.attachedRigidbody.isKinematic)
             {
                 return false;
@@ -260,7 +397,7 @@ namespace SubnautiCraft
 
             if (collider.gameObject.layer == LayerID.TerrainCollider)
             {
-                return !BlockColliders.Owns(collider);
+                return true;
             }
 
             return collider.GetComponentInParent<LiveMixin>() == null && collider.GetComponentInParent<Player>() == null

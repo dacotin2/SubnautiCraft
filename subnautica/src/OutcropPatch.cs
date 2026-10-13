@@ -6,10 +6,10 @@ using UnityEngine.AddressableAssets;
 namespace SubnautiCraft
 {
     /// <summary>
-    /// Breaking an outcrop (limestone, sandstone, shale) drops the Minecraft ore of what Subnautica rolled for it, lore
-    /// accurate: limestone gives copper or titanium, so raw copper or raw iron; sandstone silver, gold or lead; shale
-    /// diamond, gold or lithium. The Minecraft item falls in Minecraft's world at the outcrop, for Steve to pick up.
-    /// Subnautica's own chunk still drops too (its crafting needs it) unless OutcropDrops says otherwise.
+    /// With OutcropMinecraftOres on, breaking an outcrop (limestone, sandstone, shale) also drops the vanilla Minecraft
+    /// ore of what Subnautica rolled for it: limestone gives copper or titanium, so raw copper or raw iron; sandstone
+    /// silver, gold or lead; shale diamond, gold or lithium. It falls in Minecraft's world at the outcrop. Off by
+    /// default: Subnautica's own chunk is already a Minecraft item when Steve picks it up, so this is a second one.
     /// </summary>
     internal static class OutcropDrops
     {
@@ -61,7 +61,7 @@ namespace SubnautiCraft
 
         private static void Prefix(BreakableResource __instance)
         {
-            OutcropDrops.Rolled = OutcropDrops.Active && Plugin.OutcropDrops.Value != "Subnautica" && !(bool)Broken.GetValue(__instance) ? new List<TechType>() : null;
+            OutcropDrops.Rolled = OutcropDrops.Active && Plugin.OutcropMinecraftOres.Value && !(bool)Broken.GetValue(__instance) ? new List<TechType>() : null;
         }
 
         private static void Postfix(BreakableResource __instance)
@@ -94,12 +94,5 @@ namespace SubnautiCraft
                 }
             }
         }
-    }
-
-    /// <summary>OutcropDrops = Minecraft: only the Minecraft ore, no Subnautica chunk.</summary>
-    [HarmonyPatch(typeof(BreakableResource), "SpawnResourceFromPrefab", new[] { typeof(AssetReferenceGameObject) })]
-    internal static class OutcropSubnauticaDropPatch
-    {
-        private static bool Prefix() => !(OutcropDrops.Active && Plugin.OutcropDrops.Value == "Minecraft");
     }
 }

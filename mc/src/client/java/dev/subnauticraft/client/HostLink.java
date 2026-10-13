@@ -38,7 +38,17 @@ import org.java_websocket.server.WebSocketServer;
  * <li>{"t":"fov","v":deg}, {"t":"water","y":ocean level or null (dry)}</li>
  * <li>{"t":"in",...}: Subnautica's keyboard and mouse for Minecraft, plus "look":[yaw,pitch] (see InputBridge)</li>
  * <li>{"t":"releaseall"}: let go of every key (Subnautica's PDA or menu took the input)</li>
+ * <li>{"t":"menu","kind":"chest|crafting|vehicles",...}: Steve used a locker, the fabricator or the vehicle bay: Minecraft's screen for it (SnMenus)</li>
+ * <li>{"t":"creatures","c":[[id,x,y,z,size],...]}: Subnautica's creatures near the player (Minecraft's monsters hunt their stand-ins)</li>
+ * <li>{"t":"mobhit","id":entity,"dmg":hp}: a Subnautica creature bit that Minecraft mob</li>
+ * <li>{"t":"known","items":[...],"new":bool}: blueprints the diver knows: their recipes are unlocked (SnBlueprints)</li>
+ * <li>{"t":"scanning"}: a second of scanning with the scanner in Steve's hand</li>
+ * <li>{"t":"recipes","r":[{"out":{...},"n":count,"in":[...]},...]}: the rest of Subnautica's fabricator (SnFabricator)</li>
+ * <li>{"t":"give","item":id or "tech":TechType,"name":...,"n":count,"food":f,"water":w}: Steve picked something up in Subnautica (SnPickups)</li>
+ * <li>{"t":"built","tech":...,"ok":bool}: the vehicle bay started building what Steve asked for, or had no room</li>
+ * <li>{"t":"save","slot":"slot0001"}: the Subnautica save being played; Minecraft plays that save's own world</li>
  * <li>{"t":"lighting","unlit":bool}: Subnautica lights the world (Minecraft draws it without its own light) or Minecraft does</li>
+ * <li>{"t":"icon","n":item,"png":base64}, then {"t":"icons","names":{item:name}}: Subnautica's icons and names for its items (IconPack)</li>
  * <li>{"t":"hurt","kind":Subnautica damage type,"hp":amount}, {"t":"heal","hp":amount}: the diver's damage and healing, for Steve</li>
  * <li>{"t":"pause","on":bool}: Subnautica paused, loading, in its menu, or Steve waiting for the ground under him</li>
  * <li>{"t":"terrainevict","p":[x,y,z],"r":radius}, {"t":"terrainclear"}</li>
@@ -51,6 +61,8 @@ import org.java_websocket.server.WebSocketServer;
 public final class HostLink extends WebSocketServer {
 	public static final int DEFAULT_PORT = 25611;
 	private static HostLink instance;
+	/** The Subnautica save being played ({"t":"save"}). */
+	private volatile String slot;
 
 	private HostLink(final int port) {
 		super(new InetSocketAddress("127.0.0.1", port));
@@ -85,6 +97,7 @@ public final class HostLink extends WebSocketServer {
 			SubnautiCraft.steve = false;
 			SnWater.clear();
 			Minecraft minecraft = Minecraft.getInstance();
+			WorldBridge.withServer(server -> dev.subnauticraft.SnCreatures.clear());
 			minecraft.execute(() -> {
 				setUnlit(minecraft, false);
 				InputBridge.releaseAll();
@@ -124,6 +137,88 @@ public final class HostLink extends WebSocketServer {
 					minecraft.execute(() -> InputBridge.apply(minecraft, m));
 				}
 				case "releaseall" -> minecraft.execute(InputBridge::releaseAll);
+				case "icon" -> IconPack.put(m.get("n").getAsString(), java.util.Base64.getDecoder().decode(m.get("png").getAsString()));
+				case "icons" -> {
+					java.util.Map<String, String> names = new java.util.HashMap<>();
+					if (m.has("names")) {
+						m.getAsJsonObject("names").entrySet().forEach(e -> names.put(e.getKey(), e.getValue().getAsString()));
+					}
+
+					minecraft.execute(() -> IconPack.finish(minecraft, names));
+				}
+				case "menu" -> {
+					String kind = m.get("kind").getAsString();
+					String title = m.has("title") ? m.get("title").getAsString() : "";
+					String id = m.has("id") ? m.get("id").getAsString() : "";
+					java.util.List<dev.subnauticraft.SnMenus.Option> options = new java.util.ArrayList<>();
+					if (m.has("options")) {
+						for (com.google.gson.JsonElement e : m.getAsJsonArray("options")) {
+							JsonObject o = e.getAsJsonObject();
+							java.util.List<dev.subnauticraft.SnMenus.Need> needs = new java.util.ArrayList<>();
+							for (com.google.gson.JsonElement n : o.getAsJsonArray("ingredients")) {
+								JsonArray a = n.getAsJsonArray();
+								needs.add(new dev.subnauticraft.SnMenus.Need(a.get(0).getAsString(), a.get(1).getAsInt(), a.get(2).getAsString()));
+							}
+
+							options.add(new dev.subnauticraft.SnMenus.Option(o.get("tech").getAsString(), o.get("item").getAsString(), o.get("name").getAsString(), needs));
+						}
+					}
+
+					int rows = m.has("rows") ? m.get("rows").getAsInt() : 3;
+					WorldBridge.withPlayer(player -> {
+						switch (kind) {
+							case "chest" -> dev.subnauticraft.SnMenus.openLocker(player, id, rows, title);
+							case "crafting" -> dev.subnauticraft.SnMenus.openCrafting(player, title);
+							case "vehicles" -> dev.subnauticraft.SnMenus.openVehicles(player, id, title, options);
+							default -> SubnautiCraft.LOG.warn("unknown menu {}", kind);
+						}
+					});
+				}
+				case "creatures" -> {
+					JsonArray list = m.getAsJsonArray("c");
+					double[][] creatures = new double[list.size()][];
+					for (int i = 0; i < list.size(); i++) {
+						JsonArray c = list.get(i).getAsJsonArray();
+						creatures[i] = new double[] {c.get(0).getAsDouble(), c.get(1).getAsDouble(), c.get(2).getAsDouble(), c.get(3).getAsDouble(), c.get(4).getAsDouble()};
+					}
+
+					WorldBridge.withServer(server -> dev.subnauticraft.SnCreatures.update(server, creatures));
+				}
+				case "mobhit" -> {
+					int mob = m.get("id").getAsInt();
+					float damage = m.get("dmg").getAsFloat();
+					WorldBridge.withServer(server -> dev.subnauticraft.SnCreatures.mobHit(server, mob, damage));
+				}
+				case "known" -> {
+					java.util.List<String> items = new java.util.ArrayList<>();
+					m.getAsJsonArray("items").forEach(e -> items.add(e.getAsString()));
+					dev.subnauticraft.SnBlueprints.received(items);
+				}
+				case "scanning" -> WorldBridge.withServer(dev.subnauticraft.SnBlueprints::scanned);
+				case "recipes" -> dev.subnauticraft.SnFabricator.received(m.getAsJsonArray("r"));
+				case "give" -> {
+					String item = m.has("item") ? m.get("item").getAsString() : null;
+					String tech = m.has("tech") ? m.get("tech").getAsString() : null;
+					String name = m.has("name") ? m.get("name").getAsString() : null;
+					int count = m.has("n") ? m.get("n").getAsInt() : 1;
+					Float food = m.has("food") ? m.get("food").getAsFloat() : null;
+					Float water = m.has("water") ? m.get("water").getAsFloat() : null;
+					WorldBridge.withPlayer(player -> dev.subnauticraft.SnPickups.give(player, item, tech, name, count, food, water));
+				}
+				case "built" -> {
+					boolean ok = m.get("ok").getAsBoolean();
+					WorldBridge.withPlayer(player -> dev.subnauticraft.SnMenus.built(player, ok));
+				}
+				case "save" -> {
+					String slot = m.get("slot").getAsString();
+					if (!slot.equals(this.slot)) {
+						// another Subnautica save: what the diver knows there comes next
+						this.slot = slot;
+						dev.subnauticraft.SnBlueprints.forget();
+					}
+
+					minecraft.execute(() -> SubnautiCraftClient.useSave(minecraft, slot));
+				}
 				case "lighting" -> {
 					boolean unlit = m.get("unlit").getAsBoolean();
 					minecraft.execute(() -> setUnlit(minecraft, unlit));

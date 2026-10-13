@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:battery",
+    "subnauticraft:titanium"
+  ],
+  "result": {
+    "id": "subnauticraft:scanner"
+  }
+}

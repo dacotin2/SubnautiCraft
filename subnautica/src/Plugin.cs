@@ -16,13 +16,14 @@ namespace SubnautiCraft
     {
         public const string Guid = "dev.subnauticraft";
         public const string Name = "SubnautiCraft";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         internal static ManualLogSource Log;
 
         internal static ConfigEntry<int> Port;
         internal static ConfigEntry<bool> StartAsSteve;
         internal static ConfigEntry<bool> ShowMinecraftWindow;
+        internal static ConfigEntry<bool> SkipIntro;
         internal static ConfigEntry<int> SubnauticaMaxFps;
         internal static ConfigEntry<int> MinecraftDistance;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey;
@@ -43,7 +44,7 @@ namespace SubnautiCraft
         internal static ConfigEntry<float> DamageScale;
         internal static ConfigEntry<float> SwordDamageScale;
         internal static ConfigEntry<float> ArrowDamage;
-        internal static ConfigEntry<string> OutcropDrops;
+        internal static ConfigEntry<bool> OutcropMinecraftOres;
 
         private void Awake()
         {
@@ -51,6 +52,8 @@ namespace SubnautiCraft
             Port = Config.Bind("General", "Port", 25611, "WebSocket port of the SubnautiCraft Fabric mod (must match -Dsubnauticraft.port in Minecraft).");
             StartAsSteve = Config.Bind("General", "StartAsSteve", true,
                 "Play as Steve as soon as Minecraft is connected (Minecraft movement, swimming, inventory and building). Off: start as Ryley.");
+            SkipIntro = Config.Bind("General", "SkipIntro", true,
+                "Skip a new game's intro (the launch cutscene and the lifepod fire): the game goes on as after it.");
             ShowMinecraftWindow = Config.Bind("General", "ShowMinecraftWindow", false,
                 "Leave Minecraft's own window where it is (on a second screen, say) instead of moving it off the desktop while connected.");
             ToggleKey = Config.Bind("Keys", "Toggle", new KeyboardShortcut(KeyCode.F7),
@@ -90,9 +93,8 @@ namespace SubnautiCraft
                 "Steve mode: what would hurt the diver hurts Steve, times this (the diver has 100 health, Steve 20 = 10 hearts).");
             ExplosionDamage = Config.Bind("Fun", "ExplosionDamage", 60f, "Damage a Minecraft explosion (TNT, creeper) does to Subnautica creatures, and to you, at its centre.");
             ArrowDamage = Config.Bind("Fun", "ArrowDamage", 20f, "Damage a Minecraft arrow does to the Subnautica creature it hits (the survival knife does 25).");
-            OutcropDrops = Config.Bind("Fun", "OutcropDrops", "Both",
-                new ConfigDescription("Breaking limestone, sandstone or shale as Steve drops: the Minecraft ore of what Subnautica rolled (copper -> raw copper, titanium -> raw iron, gold -> raw gold...), Subnautica's own chunk, or both.",
-                    new AcceptableValueList<string>("Both", "Minecraft", "Subnautica")));
+            OutcropMinecraftOres = Config.Bind("Fun", "OutcropMinecraftOres", false,
+                "Breaking limestone, sandstone or shale as Steve also drops the vanilla Minecraft ore of what Subnautica rolled (copper -> raw copper, quartz -> quartz...), besides Subnautica's own chunk (which is already a Minecraft item when Steve picks it up).");
             SwordDamageScale = Config.Bind("Fun", "SwordDamageScale", 3.5f,
                 "Minecraft swords work as Subnautica's knife (they also cut samples and seeds): damage = the sword's Minecraft attack damage x this (diamond 7 x 3.5 = about the knife's 25). 0 = off.");
 

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:acid_mushroom",
+    "subnauticraft:acid_mushroom",
+    "subnauticraft:copper_ore"
+  ],
+  "result": {
+    "id": "subnauticraft:battery"
+  }
+}

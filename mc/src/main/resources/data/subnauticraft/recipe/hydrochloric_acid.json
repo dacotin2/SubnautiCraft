@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:deep_shroom",
+    "subnauticraft:deep_shroom",
+    "subnauticraft:deep_shroom",
+    "subnauticraft:salt_deposit"
+  ],
+  "result": {
+    "id": "subnauticraft:hydrochloric_acid"
+  }
+}

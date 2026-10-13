@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "subnauticraft:wiring_kit",
+    "subnauticraft:gold",
+    "subnauticraft:gold",
+    "subnauticraft:computer_chip"
+  ],
+  "result": {
+    "id": "subnauticraft:advanced_wiring_kit"
+  }
+}

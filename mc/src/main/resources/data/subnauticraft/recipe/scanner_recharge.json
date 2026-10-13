@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "equipment",
+  "ingredients": [
+    "subnauticraft:scanner",
+    "subnauticraft:battery"
+  ],
+  "result": {
+    "id": "subnauticraft:scanner"
+  }
+}

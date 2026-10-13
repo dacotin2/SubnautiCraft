@@ -63,7 +63,7 @@ namespace SubnautiCraft
             foreach (RaycastHit hit in hits)
             {
                 Collider c = hit.collider;
-                if (c.GetComponentInParent<Player>() != null || BlockColliders.Owns(c))
+                if (c.GetComponentInParent<Player>() != null || BlockColliders.Owns(c) || c.GetComponentInParent<McMobProxy>() != null)
                 {
                     continue; // the diver himself; Minecraft's own blocks already stop arrows in Minecraft
                 }

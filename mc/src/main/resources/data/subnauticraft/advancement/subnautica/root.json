@@ -1,0 +1,26 @@
+{
+  "criteria": {
+    "always": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "display": {
+    "icon": {
+      "id": "subnauticraft:scanner"
+    },
+    "title": {
+      "translate": "advancements.subnauticraft.root.title"
+    },
+    "description": {
+      "translate": "advancements.subnauticraft.root.description"
+    },
+    "background": "subnauticraft:gui/advancements/backgrounds/sea",
+    "show_toast": false,
+    "announce_to_chat": false
+  },
+  "requirements": [
+    [
+      "always"
+    ]
+  ]
+}
