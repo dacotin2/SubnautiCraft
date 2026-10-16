@@ -121,13 +121,19 @@ public final class IconPack {
 			cases.add(entry);
 		}
 
+		JsonObject item = new JsonObject();
+		if (kinds.isEmpty()) {
+			// no pictures yet: Minecraft refuses a choice among none
+			item.add("model", plainModel("subnauticraft:item/subnautica_item"));
+			return changed + writeIfChanged(root.resolve("assets/subnauticraft/items/subnautica_item.json"), item.toString().getBytes(StandardCharsets.UTF_8));
+		}
+
 		JsonObject select = new JsonObject();
 		select.addProperty("type", "minecraft:select");
 		select.addProperty("property", "minecraft:custom_model_data");
 		select.addProperty("index", 0);
 		select.add("cases", cases);
 		select.add("fallback", plainModel("subnauticraft:item/subnautica_item"));
-		JsonObject item = new JsonObject();
 		item.add("model", select);
 		return changed + writeIfChanged(root.resolve("assets/subnauticraft/items/subnautica_item.json"), item.toString().getBytes(StandardCharsets.UTF_8));
 	}

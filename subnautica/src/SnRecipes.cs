@@ -80,7 +80,7 @@ namespace SubnautiCraft
                     CoroutineTask<GameObject> task = CraftData.GetPrefabForTechTypeAsync(tech, false);
                     yield return task;
                     GameObject prefab = task.GetResult();
-                    eat = SnItems.EatJson(tech, prefab != null ? prefab.GetComponent<Eatable>() : null);
+                    eat = SnItems.EatJson(tech, prefab != null ? prefab.GetComponent<Eatable>() : null) + SteveTools.ChargeJson(prefab, true);
                 }
 
                 sb.Append(count++ == 0 ? "" : ",")

@@ -12,7 +12,7 @@ namespace SubnautiCraft
     [HarmonyPatch(typeof(GameInput), "HasFlag")]
     internal static class InputPatch
     {
-        private static bool Prefix(GameInput.Button action, ref bool __result)
+        private static bool Prefix(GameInput.Button action, GameInput.InputStateFlags flag, ref bool __result)
         {
             if (!Bridge.BlockGameInput)
             {
@@ -23,6 +23,20 @@ namespace SubnautiCraft
             {
                 case GameInput.Button.PDA:
                     return true;
+                case GameInput.Button.RightHand:
+                case GameInput.Button.LeftHand:
+                    // a Subnautica tool in Steve's hand (SteveTools), on Minecraft's buttons: right click uses it (left
+                    // click is Minecraft's attack), the middle button is its second action
+                    __result = action == GameInput.Button.LeftHand && SteveTools.Active && !Bridge.McScreenOpen && Mouse(2, flag);
+                    return false;
+                case GameInput.Button.AltTool:
+                    if (SteveTools.Active && !Bridge.McScreenOpen)
+                    {
+                        return true;
+                    }
+
+                    __result = false;
+                    return false;
                 case GameInput.Button.UIMenu:
                     if (!Bridge.McScreenOpen)
                     {
@@ -35,6 +49,28 @@ namespace SubnautiCraft
                     __result = false;
                     return false;
             }
+        }
+
+        /// <summary>A mouse button's state this frame, as Subnautica's input reports a button's.</summary>
+        private static bool Mouse(int button, GameInput.InputStateFlags flag)
+        {
+            GameInput.InputStateFlags state = GameInput.InputStateFlags.None;
+            if (Input.GetMouseButtonDown(button))
+            {
+                state |= GameInput.InputStateFlags.Down;
+            }
+
+            if (Input.GetMouseButton(button))
+            {
+                state |= GameInput.InputStateFlags.Held;
+            }
+
+            if (Input.GetMouseButtonUp(button))
+            {
+                state |= GameInput.InputStateFlags.Up;
+            }
+
+            return (state & flag) != 0;
         }
     }
 

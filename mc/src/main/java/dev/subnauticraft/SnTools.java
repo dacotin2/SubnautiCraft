@@ -26,6 +26,15 @@ public final class SnTools {
 
 	/** Which of the tools this is ("flashlight", "seaglide"), if it still has charge; null otherwise. */
 	public static String working(final ItemStack stack) {
+		String tech = SnPickups.tech(stack);
+		if ("Welder".equals(tech)) {
+			return "welder"; // Subnautica's repair tool (no battery of its own in Minecraft)
+		}
+
+		if (tech != null) {
+			return "sn:" + tech; // any other: if it's a tool, the diver holds the real one (SteveTools)
+		}
+
 		if (stack.isEmpty() || stack.getMaxDamage() <= 0 || stack.getDamageValue() >= stack.getMaxDamage() - 1) {
 			return null;
 		}

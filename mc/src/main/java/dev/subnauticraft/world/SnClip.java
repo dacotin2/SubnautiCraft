@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -16,6 +17,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class SnClip {
 	private static final ThreadLocal<List<SnTri>> SCRATCH = ThreadLocal.withInitial(ArrayList::new);
+	/** The last hit that was Subnautica's terrain rather than a block (swinging at it digs it: SnDig). */
+	private static volatile BlockHitResult lastTerrain;
 
 	private SnClip() {
 	}
@@ -46,5 +49,29 @@ public final class SnClip {
 		Direction face = Direction.values()[SnRay.dominantFace(hit.nx(), hit.ny(), hit.nz())];
 		int[] cell = SnRay.placementCell(hit);
 		return new BlockHitResult(location, face, new BlockPos(cell[0], cell[1], cell[2]), false);
+	}
+
+	/**
+	 * The crosshair: as {@link #refine}, but a block sunk in the terrain (one Steve is digging, SnDig) is what it aims
+	 * at when the terrain's surface hides it, and a hit on bare terrain is remembered (swinging at it digs it).
+	 */
+	public static BlockHitResult pick(final BlockGetter level, final Vec3 from, final Vec3 to, final BlockHitResult vanilla) {
+		BlockHitResult hit = refine(from, to, vanilla);
+		if (hit == vanilla) {
+			return hit;
+		}
+
+		BlockPos behind = hit.getBlockPos().relative(hit.getDirection().getOpposite());
+		if (!level.getBlockState(behind).isAir()) {
+			return new BlockHitResult(hit.getLocation(), hit.getDirection(), behind, false);
+		}
+
+		lastTerrain = hit;
+		return hit;
+	}
+
+	/** This hit (the crosshair's) is on Subnautica's terrain. */
+	public static boolean isTerrain(final BlockHitResult hit) {
+		return hit != null && hit == lastTerrain;
 	}
 }

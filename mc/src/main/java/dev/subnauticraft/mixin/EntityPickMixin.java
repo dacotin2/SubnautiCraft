@@ -18,6 +18,6 @@ abstract class EntityPickMixin {
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;clip(Lnet/minecraft/world/level/ClipContext;)Lnet/minecraft/world/phys/BlockHitResult;")
 	)
 	private BlockHitResult snc$pickTerrain(final Level level, final ClipContext context, final Operation<BlockHitResult> original) {
-		return SnClip.refine(context.getFrom(), context.getTo(), original.call(level, context));
+		return SnClip.pick(level, context.getFrom(), context.getTo(), original.call(level, context));
 	}
 }

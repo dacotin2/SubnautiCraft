@@ -26,6 +26,7 @@ public final class HostState {
 	private static final long TIMEOUT_NANOS = 2_000_000_000L;
 	private static volatile Pose latest;
 	private static volatile float fov = 70.0F;
+	private static volatile float overscan = 1.0F;
 	private static volatile long lastMessageNanos;
 	/** Steve mode: where Subnautica's camera looks (Minecraft yaw, pitch); Subnautica turns its camera with no lag and Steve follows. */
 	private static volatile float lookYaw, lookPitch;
@@ -48,8 +49,9 @@ public final class HostState {
 		lastMessageNanos = System.nanoTime();
 	}
 
-	static void setFov(final float degrees) {
+	static void setFov(final float degrees, final float margin) {
 		fov = degrees;
+		overscan = Math.max(1.0F, Math.min(2.0F, margin));
 	}
 
 	static void setLook(final float yaw, final float pitch) {
@@ -99,8 +101,14 @@ public final class HostState {
 		return SubnautiCraft.steve && linked();
 	}
 
+	/**
+	 * The vertical field of view Minecraft draws its world with: Subnautica's, widened by the overscan margin (the
+	 * picture lags a frame or two behind a fast turn, and the margin keeps its edges off the screen). The frame header
+	 * carries it, so Subnautica rebuilds the picture with the same one; the hand keeps its own.
+	 */
 	public static float fov() {
-		return fov;
+		double half = Math.toRadians(fov) * 0.5;
+		return (float) Math.toDegrees(2.0 * Math.atan(Math.tan(half) * overscan));
 	}
 
 	/** The latest Ryley-mode pose if Subnautica is still sending, else null. */

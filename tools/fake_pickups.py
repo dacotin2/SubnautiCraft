@@ -8,7 +8,8 @@
 6. Q on one of Subnautica's things sends it to Subnautica's world ({"t":"drop"}) instead of dropping it in Minecraft,
 7. right click with the mobile vehicle bay places it in Subnautica ({"t":"place"}),
 8. the rest of Subnautica's fabricator ({"t":"recipes"}) becomes recipes in the world: locked until the blueprint is
-   known, then they craft, Subnautica items in and out.
+   known, then they craft, Subnautica items in and out,
+9. the survival knife is an iron sword, the thermoblade one with Fire Aspect, and the repair tool in hand is reported to Subnautica (it welds there).
 
     python tools/fake_pickups.py --port 25612
 """
@@ -42,6 +43,7 @@ def main():
     ws.settimeout(0.001)
     ate = []
     got = []
+    pov = {}
 
     def send(o):
         ws.send(json.dumps(o))
@@ -61,6 +63,8 @@ def main():
                         ate.append(m)
                     elif m.get("t") in ("drop", "place"):
                         got.append(m)
+                    elif m.get("t") == "pov":
+                        pov["tool"] = m.get("tool")
             except (websocket.WebSocketTimeoutException, TimeoutError):
                 pass
             time.sleep(1 / 60)
@@ -244,6 +248,23 @@ def main():
     check("with the blueprint, copper wire + sulphur (a Subnautica item) craft a beacon (another)", "Test passed" in out, out.strip()[-80:])
     out = query("execute if entity @a[advancements={subnauticraft:subnautica/tech_beacon=true}]")
     check("... and the beacon shows in the Subnautica advancements tab", "Test passed" in out, out.strip()[-80:])
+
+    # 9. knife and repair tool
+    send({"t": "cmd", "c": "clear @a"})
+    send({"t": "give", "tech": "Knife", "name": "Cuchillo de supervivencia", "n": 1})
+    pump(0.5)
+    out = query("execute if items entity @a container.* minecraft:iron_sword")
+    check("the survival knife is an iron sword", "Test passed" in out, out.strip()[-80:])
+    send({"t": "cmd", "c": "clear @a"})
+    send({"t": "give", "tech": "HeatBlade", "name": "Cuchilla térmica", "n": 1})
+    pump(0.5)
+    out = query("data get entity @a[limit=1] Inventory")
+    check("the thermoblade is an iron sword with Fire Aspect", "iron_sword" in out and "fire_aspect" in out, out.strip()[-160:])
+    send({"t": "cmd", "c": "clear @a"})
+    send({"t": "give", "tech": "Welder", "name": "Herramienta de reparación", "n": 1})
+    pump(0.3, {"k": [[30, True]]})
+    pump(1.0, {"k": [[30, False]]})
+    check("the repair tool in hand is reported to Subnautica", pov.get("tool") == "welder", "tool=%r" % pov.get("tool"))
 
     send({"t": "cmd", "c": "clear @a"})
     send({"t": "cmd", "c": "gamemode creative @a"})

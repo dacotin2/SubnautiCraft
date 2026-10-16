@@ -114,10 +114,16 @@ abstract class CameraMixin {
 		Vec3 v = player.getDeltaMovement().scale(20.0);
 		boolean screen = minecraft.gui.screen() != null && !HostState.hostPaused;
 		SubnautiCraft.events.accept(String.format(Locale.ROOT,
-			"{\"t\":\"pov\",\"p\":[%.4f,%.4f,%.4f],\"r\":[%.3f,%.3f],\"f\":[%.4f,%.4f,%.4f],\"v\":[%.3f,%.3f,%.3f],\"scr\":%b,\"tp\":%b,\"sw\":%b,\"fly\":%b,\"hp\":%.2f,\"hpMax\":%.2f,\"dead\":%b,\"pid\":%d,\"tq\":%d,\"tool\":\"%s\",\"e\":[%.4f,%.4f,%.4f]}",
+			"{\"t\":\"pov\",\"p\":[%.4f,%.4f,%.4f],\"r\":[%.3f,%.3f],\"f\":[%.4f,%.4f,%.4f],\"v\":[%.3f,%.3f,%.3f],\"scr\":%b,\"tp\":%b,\"sw\":%b,\"fly\":%b,\"hp\":%.2f,\"hpMax\":%.2f,\"dead\":%b,\"pid\":%d,\"tq\":%d,\"tool\":\"%s\",\"tc\":%.4f,\"e\":[%.4f,%.4f,%.4f]}",
 			at.x, at.y, at.z, this.yRot, this.xRot, feet.x, feet.y, feet.z, v.x, v.y, v.z, screen, this.detached,
 			player.isInWater(), player.getAbilities().flying, player.getHealth(), player.getMaxHealth(), player.isDeadOrDying(), System.identityHashCode(player),
 			dev.subnauticraft.world.SnCollision.pending(), java.util.Objects.requireNonNullElse(dev.subnauticraft.SnTools.working(player.getMainHandItem()), ""),
-			eye.x, eye.y, eye.z));
+			snc$toolCharge(player.getMainHandItem()), eye.x, eye.y, eye.z));
+	}
+
+	/** The battery of the Subnautica tool in hand (its durability bar), -1 for anything else: the real tool starts with it. */
+	private static float snc$toolCharge(final net.minecraft.world.item.ItemStack held) {
+		return dev.subnauticraft.SnPickups.tech(held) != null && held.isDamageableItem()
+			? 1.0F - (float) held.getDamageValue() / held.getMaxDamage() : -1.0F;
 	}
 }

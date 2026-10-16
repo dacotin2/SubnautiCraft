@@ -32,6 +32,18 @@ Subnautica's world:
   cook them in a furnace, smoker or campfire, or cure them with salt. What Steve eats fills the diver's food bar too.
 - The flashlight and the Seaglide work in Steve's hand: the flashlight lights where he looks, the Seaglide pulls him
   through the water. They run on a battery (the durability bar); craft one with a battery to recharge it.
+- The repair tool works in Steve's hand: hold right click on something damaged (the Seamoth, the Prawn suit, the
+  Cyclops's hull breaches) to weld it. The survival knife is an iron sword and the thermoblade an iron sword with Fire
+  Aspect (swords already act as the knife).
+- Every other Subnautica tool works in Steve's hand too (the propulsion and repulsion cannons, the laser cutter, the
+  stasis rifle, the habitat builder, the pathfinder, the air bladder...): while Steve holds one, the hidden diver holds
+  the real tool, and right click uses it (left click stays Minecraft's attack; the middle button is its second action).
+- Tools run on a battery whose charge is the item's durability bar; what the real tool spends in Subnautica comes back.
+  R with a tool in hand opens the battery screen: its charge, and a slot to put a fresh battery in.
+- Steve digs Subnautica's terrain: swinging at the seafloor or a rock face puts an invisible block standing for it in
+  that spot (sand or gravel underfoot, stone in walls, blackstone near lava: mined, heard and dropped like that block),
+  and mining it cuts the same cube out of Subnautica's terrain, for real: the terrain there is rebuilt without it, look
+  and collision. What was dug is kept with the save. TNT and creepers blast round holes in the terrain the same way.
 - Each Subnautica save has its own Minecraft world.
 - Subnautica's machines open Minecraft screens: a locker is a Minecraft chest (kept in that save's world), the
   fabricator a crafting table, and the mobile vehicle bay a screen of vehicles with their cost in Minecraft items
@@ -116,7 +128,7 @@ Subnautica (BepInEx plugin, C#)                          Minecraft 26.3 + Fabric
 You need:
 
 - **Minecraft 26.3** with **Fabric Loader 0.19.5** and **Fabric API 0.161.0+26.3** (e.g. a Prism Launcher instance), plus
-  `subnauticraft-0.2.0.jar` in its `mods` folder.
+  `subnauticraft-0.3.0.jar` in its `mods` folder.
 - **Subnautica** with **BepInEx 5**, plus `SubnautiCraft.dll` in `Subnautica\BepInEx\plugins\SubnautiCraft\`.
 
 Both are on the [releases page](https://github.com/dacotin2/SubnautiCraft/releases), or build them from source (see [Build](#build)).
@@ -161,6 +173,7 @@ itself.
 | `Shader` | `MarmosetUBER` (Subnautica's lighting), `Standard`, or `Sprites/Default` (flat, unlit). |
 | `Lighting` | Who lights the blocks: `Subnautica` (like the game's own models: its light, shadows and water) or `Minecraft` (Minecraft's own light). |
 | `Shadows` | Minecraft's blocks cast shadows in Subnautica (with the game's shadows on). |
+| `Overscan` | How much wider than the screen Minecraft draws its world (1.3), so turning fast doesn't show its picture ending at the screen's edges for a moment. |
 | `GlowingBlocks` | How brightly torches, sea lanterns, lava and other light-giving blocks glow (1). |
 | `TerrainRadius` | Metres of terrain around you sent to Minecraft as collision (24). |
 | `BlockColliders` | Minecraft's blocks are solid in Subnautica. |
@@ -168,6 +181,7 @@ itself.
 | `DamageScale` | How much of the diver's damage Steve takes (0.2: Subnautica's 100 health to Minecraft's 20). |
 | `ExplosionDamage` | Damage TNT and creepers do around them in Subnautica (you included). |
 | `ArrowDamage` | Damage a Minecraft arrow does to the creature it hits (20; the knife does 25). |
+| `ExplosionsDigTerrain` | Minecraft explosions (TNT, creepers) blast a round hole in Subnautica's terrain (on by default). |
 | `OutcropMinecraftOres` | Breaking an outcrop as Steve also drops the vanilla Minecraft ore (off: Subnautica's chunk is already a Minecraft item). |
 | `SwordDamageScale` | Swords act as the knife: damage = the sword's Minecraft damage × this (diamond 7 × 3.5 ≈ the knife's 25). |
 
@@ -179,7 +193,7 @@ game's own assemblies).
 ```bash
 cd mc && ./gradlew build
 ```
-Makes `mc/build/libs/subnauticraft-0.1.0.jar`; copy it into your Minecraft instance's `mods` folder.
+Makes `mc/build/libs/subnauticraft-<version>.jar`; copy it into your Minecraft instance's `mods` folder.
 
 ```bash
 cd subnautica && dotnet build -c Release
@@ -207,19 +221,21 @@ on another port, so it never touches your real game. Then, with a Python environ
 | `fake_fights.py` | Minecraft reports its mobs; a Subnautica bite hurts one; a drowned hunts a Subnautica creature's stand-in and the hit goes back; a cod by a rock wall goes around it. |
 | `fake_pickups.py` | A material picked up in Subnautica arrives as its item; anything else (sulphur) as a "Subnautica item" with its kind, name and icon, and two stack; Subnautica's water can be drunk and gives the diver its water; the first aid kit heals and is used up; salvage crafts into titanium with no blueprint; Q sends Subnautica's things to Subnautica and right click places the vehicle bay; Subnautica's other fabricator recipes load into the world, locked until their blueprint is known, then craft with Subnautica items. |
 | `fake_blueprints.py` | Copper wire can't be crafted before its blueprint is known; once Subnautica says it is, it crafts and shows in the advancements tab; scanning spends the scanner's battery. |
+| `fake_dig.py` | Swinging at the seafloor asks Subnautica about the cell, an invisible block standing for the terrain goes there, and mining it gives sand and asks Subnautica to cut its terrain; a Subnautica tool in hand is reported; the frame header carries the overscan field of view. |
 | `fake_sea.py` | Buckets, fire and campfires under and above the sea; lights reach Subnautica; boats float on the surface and can be rowed. |
 
 ```bash
 python tools/fake_steve.py --port 25612
 ```
 
-`tools/run_all_tests.sh` builds the mod, starts the development Minecraft and runs them all.
+`tools/run_all_tests.sh` builds the mod, starts the development Minecraft and runs them all. It first runs
+`tools/PatchCheck` (`dotnet run` there), which checks without Subnautica that every Harmony patch and every private
+member the plugin uses exists in the installed game: one that didn't would switch that feature off.
 
 `frame_grab.py` copies one of Minecraft's frames out of shared memory (read only), and `mesh_edges.py` rebuilds the
 depth mesh from it the way `McLayer.cs` does and lights it, to check edges and face directions without the game.
 
 ## Ideas
 
-- Minecraft mobs against Subnautica's wildlife.
 - Steve's own Minecraft model swimming in third person (F5).
 - Minecraft mobs that swim more gracefully in the "virtual water".

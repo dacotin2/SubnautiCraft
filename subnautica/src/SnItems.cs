@@ -88,7 +88,8 @@ namespace SubnautiCraft
                 link.Send("{\"t\":\"icons\"}");
             }
 
-            string message = "{\"t\":\"give\"," + McItem(tech) + ",\"n\":1" + EatJson(tech, pickupable.GetComponent<Eatable>()) + "}";
+            string message = "{\"t\":\"give\"," + McItem(tech) + ",\"n\":1" + EatJson(tech, pickupable.GetComponent<Eatable>())
+                + (SnItemTable.Items.ContainsKey(tech) ? "" : SteveTools.ChargeJson(pickupable.gameObject, false)) + "}";
             if (!quiet)
             {
                 pickupable.Pickup();
@@ -116,7 +117,7 @@ namespace SubnautiCraft
             var moving = new List<Pickupable>();
             foreach (InventoryItem item in (IEnumerable<InventoryItem>)container)
             {
-                if (item != null && item.item != null)
+                if (item != null && item.item != null && !SteveTools.IsHeld(item.item))
                 {
                     moving.Add(item.item);
                 }
@@ -142,7 +143,7 @@ namespace SubnautiCraft
         /// world as the real thing, in front of him. Placing the mobile vehicle bay deploys it (it floats up to the
         /// surface, as when the diver throws it); a beacon, a waterproof locker or a fish just come out.
         /// </summary>
-        public static IEnumerator DropFromSteve(string item, string techName, int count, bool place)
+        public static IEnumerator DropFromSteve(string item, string techName, int count, bool place, float charge = -1f)
         {
             TechType tech = TechType.None;
             if (item != null)
@@ -193,6 +194,11 @@ namespace SubnautiCraft
                 else
                 {
                     LargeWorldEntity.Register(go);
+                }
+
+                if (charge >= 0f)
+                {
+                    UWE.CoroutineHost.StartCoroutine(SteveTools.Charge(go, tech, charge));
                 }
 
                 Constructor bay = go.GetComponent<Constructor>();

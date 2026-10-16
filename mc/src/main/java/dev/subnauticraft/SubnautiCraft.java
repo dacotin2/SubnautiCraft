@@ -5,6 +5,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +26,16 @@ public class SubnautiCraft implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		SnItems.register();
+		SnTerrainBlocks.register();
 		SnCreatures.register();
 		ServerLifecycleEvents.SERVER_STARTED.register(WorldBridge::attach);
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> WorldBridge.detach());
 		ServerTickEvents.END_SERVER_TICK.register(WorldBridge::tick);
 		ServerTickEvents.END_SERVER_TICK.register(SnTools::tick);
 		ServerTickEvents.END_SERVER_TICK.register(SnCreatures::tick);
+		ServerTickEvents.END_SERVER_TICK.register(SnDig::tick);
+		// a block standing for Subnautica's terrain was mined: the terrain is cut there too
+		PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, blockEntity) -> SnDig.broken(level, player, pos));
 		// Subnautica's fabricator and blueprints, in whichever world Steve joins (they may have come while it opened)
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> server.execute(() -> {
 			if (!SnFabricator.apply(server)) {

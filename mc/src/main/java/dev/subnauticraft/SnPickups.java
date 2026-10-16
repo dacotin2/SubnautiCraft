@@ -2,9 +2,12 @@ package dev.subnauticraft;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -19,6 +22,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.Consumables;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.CustomModelData;
+import net.minecraft.world.item.enchantment.Enchantments;
 
 /**
  * What Steve picks up, cuts or is handed in Subnautica's world goes into his Minecraft inventory (the diver's own
@@ -35,8 +39,8 @@ public final class SnPickups {
 	 * for Subnautica's food and drink (null: not edible).
 	 */
 	public static void give(final ServerPlayer player, final String item, final String tech, final String name, final int count,
-			final Float food, final Float water) {
-		ItemStack stack = stack(item, tech, name, count, food, water);
+			final Float food, final Float water, final Float charge) {
+		ItemStack stack = stack(player.registryAccess(), item, tech, name, count, food, water, charge);
 		if (stack.isEmpty()) {
 			SubnautiCraft.LOG.warn("pickup: nothing to give for item {} tech {}", item, tech);
 			return;
@@ -57,7 +61,8 @@ public final class SnPickups {
 		SubnautiCraft.LOG.info("pickup: {} x{}", shown, count);
 	}
 
-	static ItemStack stack(final String item, final String tech, final String name, final int count, final Float food, final Float water) {
+	static ItemStack stack(final HolderLookup.Provider registries, final String item, final String tech, final String name, final int count,
+			final Float food, final Float water, final Float charge) {
 		if (item != null && !item.isEmpty()) {
 			Item mapped = BuiltInRegistries.ITEM.getValue(Identifier.fromNamespaceAndPath(SubnautiCraft.ID, item));
 			return mapped == Items.AIR ? ItemStack.EMPTY : new ItemStack(mapped, count);
@@ -65,6 +70,18 @@ public final class SnPickups {
 
 		if (tech == null || tech.isEmpty() || SnItems.GENERIC == null) {
 			return ItemStack.EMPTY;
+		}
+
+		Item vanilla = VANILLA.get(tech);
+		if (vanilla != null) {
+			return new ItemStack(vanilla, count);
+		}
+
+		if ("HeatBlade".equals(tech)) {
+			// the thermoblade: an iron sword (swords act as the knife) that burns, with Fire Aspect
+			ItemStack sword = new ItemStack(Items.IRON_SWORD, count);
+			registries.lookupOrThrow(Registries.ENCHANTMENT).get(Enchantments.FIRE_ASPECT).ifPresent(fire -> sword.enchant(fire, 1));
+			return sword;
 		}
 
 		ItemStack stack = new ItemStack(SnItems.GENERIC, count);
@@ -80,11 +97,20 @@ public final class SnPickups {
 			stack.set(DataComponents.CONSUMABLE, drink ? Consumables.DEFAULT_DRINK : Consumables.DEFAULT_FOOD);
 		}
 
+		if (charge != null) {
+			// a tool on a battery: its charge is the durability bar (SnBattery)
+			SnBattery.makeChargeable(stack);
+			stack.setDamageValue(Math.round((1F - Math.max(0F, Math.min(1F, charge))) * stack.getMaxDamage()));
+		}
+
 		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
 		stack.set(DataComponents.ITEM_NAME, Component.literal(name == null || name.isEmpty() ? tech : name));
 		stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(List.of(), List.of(), List.of(picture(tech)), List.of()));
 		return stack;
 	}
+
+	/** Subnautica's things that are simply a Minecraft item: the survival knife is an iron sword (swords act as the knife). */
+	private static final Map<String, Item> VANILLA = Map.of("Knife", Items.IRON_SWORD);
 
 	/** The vehicles' items are only pictures for the vehicle bay's screen. */
 	private static final Set<String> PICTURES_ONLY = Set.of("seamoth", "prawn_suit", "cyclops", "rocket_base");
@@ -120,7 +146,9 @@ public final class SnPickups {
 			return null;
 		}
 
-		return "{\"t\":\"" + (place ? "place" : "drop") + "\"," + kind + ",\"n\":" + stack.getCount() + "}";
+		String charge = tech != null && stack.isDamageableItem()
+			? String.format(Locale.ROOT, ",\"charge\":%.4f", 1F - (float) stack.getDamageValue() / stack.getMaxDamage()) : "";
+		return "{\"t\":\"" + (place ? "place" : "drop") + "\"," + kind + ",\"n\":" + stack.getCount() + charge + "}";
 	}
 
 	/** The icon pack's name for a kind's picture: "tech_crashpowder". */

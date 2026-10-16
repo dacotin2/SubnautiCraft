@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.packs.PackType;
@@ -79,7 +80,7 @@ public final class SnFabricator {
 				JsonObject r = e.getAsJsonObject();
 				JsonObject out = r.getAsJsonObject("out");
 				String name = name(out);
-				ItemStack result = stack(out, r.has("n") ? r.get("n").getAsInt() : 1);
+				ItemStack result = stack(server.registryAccess(), out, r.has("n") ? r.get("n").getAsInt() : 1);
 				if (result.isEmpty()) {
 					continue;
 				}
@@ -142,14 +143,16 @@ public final class SnFabricator {
 		return o.has("item") ? o.get("item").getAsString() : SnPickups.picture(o.get("tech").getAsString());
 	}
 
-	private static ItemStack stack(final JsonObject o, final int count) {
+	private static ItemStack stack(final HolderLookup.Provider registries, final JsonObject o, final int count) {
 		return SnPickups.stack(
+			registries,
 			o.has("item") ? o.get("item").getAsString() : null,
 			o.has("tech") ? o.get("tech").getAsString() : null,
 			o.has("name") ? o.get("name").getAsString() : null,
 			count,
 			o.has("food") ? o.get("food").getAsFloat() : null,
-			o.has("water") ? o.get("water").getAsFloat() : null);
+			o.has("water") ? o.get("water").getAsFloat() : null,
+			o.has("charge") ? o.get("charge").getAsFloat() : null);
 	}
 
 	/** One of ours by id, or a "Subnautica item" of that kind (whatever else its custom data says). */

@@ -39,6 +39,8 @@ namespace SubnautiCraft
 
         private const float MovingInterval = 0.5f;
         private readonly HashSet<long> moving = new HashSet<long>();
+        /// <summary>Regions whose terrain was just cut (TerrainDig): watched like moving ones until then.</summary>
+        private readonly Dictionary<long, float> refreshing = new Dictionary<long, float>();
         private readonly List<Collider> bodyColliders = new List<Collider>();
         private SubRoot[] subs = new SubRoot[0];
         private float nextMovingScan, nextSubSearch;
@@ -82,6 +84,31 @@ namespace SubnautiCraft
 
         public int SentRegions;
         public long SentTriangles;
+
+        /// <summary>
+        /// The terrain at <paramref name="point"/> changes (Steve dug it): for <paramref name="seconds"/> its region and the
+        /// ones around are probed often and sent whenever they changed, as the game rebuilds the terrain there.
+        /// </summary>
+        public void Refresh(Vector3 point, float seconds, float reach)
+        {
+            float until = Time.unscaledTime + seconds;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        Vector3 q = point + new Vector3(dx, dy, dz) * reach;
+                        long key = Key(Mathf.FloorToInt(q.x / Region), Mathf.FloorToInt(q.y / Region), Mathf.FloorToInt(q.z / Region));
+                        refreshing[key] = until;
+                        if (regions.TryGetValue(key, out RegionState state))
+                        {
+                            state.NextScan = 0f;
+                        }
+                    }
+                }
+            }
+        }
 
         public void Reset()
         {
@@ -215,7 +242,13 @@ namespace SubnautiCraft
             state.LastProbe = Time.unscaledTime;
             float distance = (RegionCenter(key) - player).magnitude;
             // empty regions are probed again soon (Subnautica builds colliders only near the player); full ones now and then
-            state.NextScan = Time.unscaledTime + (state.Moving ? MovingInterval : hits == 0 ? 2f : distance < 16f ? 6f : 20f);
+            bool watched = state.Moving || (refreshing.TryGetValue(key, out float until) && Time.unscaledTime < until);
+            if (!watched)
+            {
+                refreshing.Remove(key);
+            }
+
+            state.NextScan = Time.unscaledTime + (watched ? MovingInterval : hits == 0 ? 2f : distance < 16f ? 6f : 20f);
             int hash = 17;
             foreach (Vector3 v in patches)
             {
@@ -224,7 +257,7 @@ namespace SubnautiCraft
                 hash = hash * 31 + Mathf.RoundToInt(v.z * 100f);
             }
 
-            if (hits == state.Hits && (!state.Moving || hash == state.Hash))
+            if (hits == state.Hits && (!watched || hash == state.Hash))
             {
                 return; // nothing new: Minecraft has it already
             }

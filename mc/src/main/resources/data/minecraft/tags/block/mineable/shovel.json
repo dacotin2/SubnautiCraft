@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "subnauticraft:terrain_sand",
+    "subnauticraft:terrain_gravel"
+  ]
+}

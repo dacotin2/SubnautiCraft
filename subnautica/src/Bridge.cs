@@ -64,6 +64,7 @@ namespace SubnautiCraft
         private readonly List<Vector3Int> emitters = new List<Vector3Int>();
         private int sentMode = -1;
         private float sentFov = -1f;
+        private float sentOverscan = -1f;
         private bool inputReleased = true;
         private bool cursorFreed;
         private float nextWater;
@@ -91,6 +92,12 @@ namespace SubnautiCraft
         private int povTerrainBacklog;
         /// <summary>The Subnautica tool in Steve's hand, if its battery has charge ("flashlight", "seaglide").</summary>
         private string povTool;
+        private float povToolCharge = -1f;
+        private readonly SnWelder welder = new SnWelder();
+        private readonly SteveTools tools = new SteveTools();
+
+        /// <summary>The tool in the diver's hand for Steve (the game saving puts it away).</summary>
+        public static SteveTools Tools => instance != null ? instance.tools : null;
         /// <summary>The Minecraft player object Steve mode is following (a new one after a respawn waits at the world spawn).</summary>
         private int followedPlayerId = -1;
         private bool killedRyley;
@@ -307,10 +314,12 @@ namespace SubnautiCraft
                 sentUnlit = unlit;
                 link.Send(unlit == 1 ? "{\"t\":\"lighting\",\"unlit\":true}" : "{\"t\":\"lighting\",\"unlit\":false}");
             }
-            if (Mathf.Abs(cam.fieldOfView - sentFov) > 0.01f)
+            if (Mathf.Abs(cam.fieldOfView - sentFov) > 0.01f || Plugin.Overscan.Value != sentOverscan)
             {
+                // Minecraft draws a margin around the screen ("o"): its picture lags a frame or two behind a fast turn
                 sentFov = cam.fieldOfView;
-                link.Send("{\"t\":\"fov\",\"v\":" + sentFov.ToString("F3", Inv) + "}");
+                sentOverscan = Plugin.Overscan.Value;
+                link.Send("{\"t\":\"fov\",\"v\":" + sentFov.ToString("F3", Inv) + ",\"o\":" + sentOverscan.ToString("F3", Inv) + "}");
             }
 
             if (Time.unscaledTime >= nextWater)
@@ -361,6 +370,8 @@ namespace SubnautiCraft
 
             Vector3 at = cam.transform.position;
             terrain.Tick(link, at);
+            // terrain Steve dug: the terrain's frame for the streaming thread, and this save's holes
+            TerrainDig.Tick();
             // Subnautica's creatures and Minecraft's mobs: each game sees the other's, and they fight; every biter goes
             // for Steve (in Steve mode) and for the mobs, with its own bite
             mobProxies.Report(link, at);
@@ -402,6 +413,7 @@ namespace SubnautiCraft
 
             SteveEngaged = false;
             toolLight.Update(null, Vector3.zero, Quaternion.identity);
+            tools.PutAway();
             lifepod.Release();
             BlockGameInput = false;
             McScreenOpen = false;
@@ -540,6 +552,10 @@ namespace SubnautiCraft
             lifepod.Tick(Player.main, true);
             // the scanner in Steve's hand scans what he holds right click on; cinematics he set off finish at once
             scanner.Tick(povTool, McScreenOpen, link);
+            // the repair tool in Steve's hand welds what he holds right click on
+            welder.Tick(povTool, McScreenOpen);
+            // any other Subnautica tool in his hand: the diver holds the real one
+            tools.Tick(this, povDead || teleportPending ? null : povTool, true, povToolCharge, link);
             Cinematics.Tick();
             // the diver carries nothing while Steve plays: what he had (or got some other way) goes to Steve
             SnItems.EmptyDiver(link);
@@ -720,9 +736,9 @@ namespace SubnautiCraft
         /// <summary>Right click on something Subnautica's hand can use: Subnautica uses it (the same as its own click).</summary>
         private static bool TrySubnauticaUse()
         {
-            if (instance != null && instance.povTool == "scanner")
+            if (instance != null && (instance.povTool == "scanner" || instance.povTool == "welder" || SteveTools.Active))
             {
-                return false; // right click is the scanner's (SnScanner)
+                return false; // right click is the scanner's (SnScanner), the repair tool's (SnWelder) or the tool's own
             }
 
             Player player = Player.main;
@@ -794,6 +810,7 @@ namespace SubnautiCraft
             povPlayerId = m["pid"] != null ? (int)m["pid"] : 0;
             povTerrainBacklog = m["tq"] != null ? (int)m["tq"] : 0;
             povTool = (string)m["tool"];
+            povToolCharge = m["tc"] != null ? (float)m["tc"] : -1f;
             hasPov = true;
         }
 
@@ -886,10 +903,17 @@ namespace SubnautiCraft
                     }
 
                     break;
+                case "dig":
+                    TerrainDig.Ask(m, link);
+                    break;
+                case "carve":
+                    TerrainDig.Carve(m, terrain);
+                    break;
                 case "drop":
                 case "place":
                     // Steve dropped or placed one of Subnautica's things: the real thing comes out in Subnautica's world
-                    StartCoroutine(SnItems.DropFromSteve((string)m["item"], (string)m["tech"], m["n"] != null ? (int)m["n"] : 1, (string)m["t"] == "place"));
+                    StartCoroutine(SnItems.DropFromSteve((string)m["item"], (string)m["tech"], m["n"] != null ? (int)m["n"] : 1, (string)m["t"] == "place",
+                        m["charge"] != null ? (float)m["charge"] : -1f));
                     break;
                 case "lights":
                     lights.Apply(m);
@@ -958,14 +982,23 @@ namespace SubnautiCraft
         private void Explode(JObject m)
         {
             float[] pos = m["pos"]?.ToObject<float[]>();
-            if (pos == null || pos.Length < 3 || Plugin.ExplosionDamage.Value <= 0f)
+            if (pos == null || pos.Length < 3)
             {
                 return;
             }
 
             float radius = m["r"] != null ? (float)m["r"] : 4f;
             Vector3 at = Coords.FromMc(pos[0], pos[1], pos[2]);
-            DamageSystem.RadiusDamage(Plugin.ExplosionDamage.Value, at, radius * 1.5f, DamageType.Explosive, null);
+            if (Plugin.ExplosionDamage.Value > 0f)
+            {
+                DamageSystem.RadiusDamage(Plugin.ExplosionDamage.Value, at, radius * 1.5f, DamageType.Explosive, null);
+            }
+
+            if (Plugin.ExplosionsDigTerrain.Value && radius > 0.5f)
+            {
+                // as in Minecraft's ground: TNT (power 4) leaves a hole of about 3 blocks around it
+                TerrainDig.Blast(at, Mathf.Clamp(radius * 0.75f, 1f, 8f), terrain);
+            }
         }
     }
 }

@@ -1,5 +1,9 @@
 package dev.subnauticraft.client;
 
+import net.minecraft.resources.Identifier;
+import net.minecraft.client.KeyMapping;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.subnauticraft.SubnautiCraft;
 import dev.subnauticraft.WorldBridge;
 import java.io.IOException;
@@ -94,6 +98,14 @@ public class SubnautiCraftClient implements ClientModInitializer {
 		// Subnautica creatures' stand-ins are invisible: nothing of them in the picture
 		EntityRendererRegistry.register(dev.subnauticraft.SnCreatures.TYPE, NoopRenderer::new);
 		ClientTickEvents.END_CLIENT_TICK.register(SubnautiCraftClient::tick);
+		// R, Subnautica's own key for it: the battery screen of the tool in hand (SnBattery)
+		KeyMapping battery = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.subnauticraft.battery", InputConstants.Type.KEYBOARD, InputConstants.KEY_R,
+			KeyMapping.Category.register(Identifier.fromNamespaceAndPath(SubnautiCraft.ID, "subnauticraft"))));
+		ClientTickEvents.END_CLIENT_TICK.register(minecraft -> {
+			while (battery.consumeClick()) {
+				WorldBridge.withPlayer(dev.subnauticraft.SnBattery::open);
+			}
+		});
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			ServerPlayer player = handler.player;
 			player.getAbilities().flying = true;

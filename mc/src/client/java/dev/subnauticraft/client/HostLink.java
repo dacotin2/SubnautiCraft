@@ -35,7 +35,7 @@ import org.java_websocket.server.WebSocketServer;
  * <li>{"t":"window","hide":bool}: move Minecraft's own window off the desktop (it keeps rendering) or back</li>
  * <li>{"t":"mode","steve":bool}: Steve mode (Minecraft owns the player) or Ryley mode (Subnautica's camera drives)</li>
  * <li>{"t":"tp","p":[feet x,y,z],"r":[yaw,pitch]}: put Steve there (taking over from the diver, a respawn, a warp)</li>
- * <li>{"t":"fov","v":deg}, {"t":"water","y":ocean level or null (dry)}</li>
+ * <li>{"t":"fov","v":deg,"o":overscan}, {"t":"water","y":ocean level or null (dry)}</li>
  * <li>{"t":"in",...}: Subnautica's keyboard and mouse for Minecraft, plus "look":[yaw,pitch] (see InputBridge)</li>
  * <li>{"t":"releaseall"}: let go of every key (Subnautica's PDA or menu took the input)</li>
  * <li>{"t":"menu","kind":"chest|crafting|vehicles",...}: Steve used a locker, the fabricator or the vehicle bay: Minecraft's screen for it (SnMenus)</li>
@@ -44,6 +44,8 @@ import org.java_websocket.server.WebSocketServer;
  * <li>{"t":"known","items":[...],"new":bool}: blueprints the diver knows: their recipes are unlocked (SnBlueprints)</li>
  * <li>{"t":"scanning"}: a second of scanning with the scanner in Steve's hand</li>
  * <li>{"t":"recipes","r":[{"out":{...},"n":count,"in":[...]},...]}: the rest of Subnautica's fabricator (SnFabricator)</li>
+ * <li>{"t":"toolcharge","c":0..1}: the battery of the real tool Steve holds (SnBattery)</li>
+ * <li>{"t":"terrainblock","p":[x,y,z],"b":block id or null}: Subnautica's terrain in the cell Steve swings at (SnDig)</li>
  * <li>{"t":"give","item":id or "tech":TechType,"name":...,"n":count,"food":f,"water":w}: Steve picked something up in Subnautica (SnPickups)</li>
  * <li>{"t":"built","tech":...,"ok":bool}: the vehicle bay started building what Steve asked for, or had no room</li>
  * <li>{"t":"save","slot":"slot0001"}: the Subnautica save being played; Minecraft plays that save's own world</li>
@@ -120,7 +122,7 @@ public final class HostLink extends WebSocketServer {
 			Minecraft minecraft = Minecraft.getInstance();
 			switch (m.get("t").getAsString()) {
 				case "cam" -> HostState.update(m);
-				case "fov" -> HostState.setFov(m.get("v").getAsFloat());
+				case "fov" -> HostState.setFov(m.get("v").getAsFloat(), m.has("o") ? m.get("o").getAsFloat() : 1.0F);
 				case "water" -> {
 					if (m.has("y") && !m.get("y").isJsonNull()) {
 						SnWater.set(m.get("y").getAsDouble());
@@ -196,6 +198,12 @@ public final class HostLink extends WebSocketServer {
 				}
 				case "scanning" -> WorldBridge.withServer(dev.subnauticraft.SnBlueprints::scanned);
 				case "recipes" -> dev.subnauticraft.SnFabricator.received(m.getAsJsonArray("r"));
+				case "terrainblock" -> {
+					com.google.gson.JsonArray p = m.getAsJsonArray("p");
+					net.minecraft.core.BlockPos cell = new net.minecraft.core.BlockPos(p.get(0).getAsInt(), p.get(1).getAsInt(), p.get(2).getAsInt());
+					String block = m.has("b") && !m.get("b").isJsonNull() ? m.get("b").getAsString() : null;
+					WorldBridge.withServer(server -> dev.subnauticraft.SnDig.answer(server, cell, block));
+				}
 				case "give" -> {
 					String item = m.has("item") ? m.get("item").getAsString() : null;
 					String tech = m.has("tech") ? m.get("tech").getAsString() : null;
@@ -203,7 +211,12 @@ public final class HostLink extends WebSocketServer {
 					int count = m.has("n") ? m.get("n").getAsInt() : 1;
 					Float food = m.has("food") ? m.get("food").getAsFloat() : null;
 					Float water = m.has("water") ? m.get("water").getAsFloat() : null;
-					WorldBridge.withPlayer(player -> dev.subnauticraft.SnPickups.give(player, item, tech, name, count, food, water));
+					Float charge = m.has("charge") ? m.get("charge").getAsFloat() : null;
+					WorldBridge.withPlayer(player -> dev.subnauticraft.SnPickups.give(player, item, tech, name, count, food, water, charge));
+				}
+				case "toolcharge" -> {
+					float charge = m.get("c").getAsFloat();
+					WorldBridge.withPlayer(player -> dev.subnauticraft.SnBattery.charge(player, charge));
 				}
 				case "built" -> {
 					boolean ok = m.get("ok").getAsBoolean();

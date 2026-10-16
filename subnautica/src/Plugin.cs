@@ -1,6 +1,7 @@
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
+using System;
 using HarmonyLib;
 using UnityEngine;
 
@@ -16,7 +17,7 @@ namespace SubnautiCraft
     {
         public const string Guid = "dev.subnauticraft";
         public const string Name = "SubnautiCraft";
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         internal static ManualLogSource Log;
 
@@ -34,6 +35,7 @@ namespace SubnautiCraft
         internal static ConfigEntry<string> Lighting;
         internal static ConfigEntry<bool> Shadows;
         internal static ConfigEntry<float> GlowingBlocks;
+        internal static ConfigEntry<float> Overscan;
         internal static ConfigEntry<bool> SmoothTexture;
         internal static ConfigEntry<int> TerrainRadius;
         internal static ConfigEntry<bool> BlockColliders;
@@ -45,6 +47,7 @@ namespace SubnautiCraft
         internal static ConfigEntry<float> SwordDamageScale;
         internal static ConfigEntry<float> ArrowDamage;
         internal static ConfigEntry<bool> OutcropMinecraftOres;
+        internal static ConfigEntry<bool> ExplosionsDigTerrain;
 
         private void Awake()
         {
@@ -77,6 +80,9 @@ namespace SubnautiCraft
                 new ConfigDescription("Who lights Minecraft's blocks. Subnautica: they are like the game's own models (its sun, caustics, fog, lamps and darkness; they cast and take shadows) and only light-giving blocks glow. Minecraft: they keep Minecraft's own light, as in Minecraft.",
                     new AcceptableValueList<string>("Subnautica", "Minecraft")));
             Shadows = Config.Bind("Render", "Shadows", true, "Minecraft's blocks cast shadows in Subnautica (with the game's shadows on).");
+            Overscan = Config.Bind("Render", "Overscan", 1.3f,
+                new ConfigDescription("How much wider than the screen Minecraft draws its world, so turning fast doesn't show Minecraft's picture ending at the screen's edges for a moment (1 = exactly the screen; more = a wider margin, a little less sharp).",
+                    new AcceptableValueRange<float>(1f, 2f)));
             GlowingBlocks = Config.Bind("Render", "GlowingBlocks", 1f,
                 new ConfigDescription("How brightly torches, sea lanterns, lava and other light-giving blocks glow when Subnautica lights the blocks.", new AcceptableValueRange<float>(0f, 3f)));
             SmoothTexture = Config.Bind("Render", "SmoothTexture", true, "Bilinear filtering of Minecraft's picture (off = sharp pixels).");
@@ -93,18 +99,46 @@ namespace SubnautiCraft
                 "Steve mode: what would hurt the diver hurts Steve, times this (the diver has 100 health, Steve 20 = 10 hearts).");
             ExplosionDamage = Config.Bind("Fun", "ExplosionDamage", 60f, "Damage a Minecraft explosion (TNT, creeper) does to Subnautica creatures, and to you, at its centre.");
             ArrowDamage = Config.Bind("Fun", "ArrowDamage", 20f, "Damage a Minecraft arrow does to the Subnautica creature it hits (the survival knife does 25).");
+            ExplosionsDigTerrain = Config.Bind("Fun", "ExplosionsDigTerrain", true,
+                "Minecraft explosions (TNT, creepers) blast a round hole in Subnautica's terrain, as they do in Minecraft's ground (kept with the save).");
             OutcropMinecraftOres = Config.Bind("Fun", "OutcropMinecraftOres", false,
                 "Breaking limestone, sandstone or shale as Steve also drops the vanilla Minecraft ore of what Subnautica rolled (copper -> raw copper, quartz -> quartz...), besides Subnautica's own chunk (which is already a Minecraft item when Steve picks it up).");
             SwordDamageScale = Config.Bind("Fun", "SwordDamageScale", 3.5f,
                 "Minecraft swords work as Subnautica's knife (they also cut samples and seeds): damage = the sword's Minecraft attack damage x this (diamond 7 x 3.5 = about the knife's 25). 0 = off.");
 
-            new Harmony(Guid).PatchAll(typeof(Plugin).Assembly);
+            PatchEach(new Harmony(Guid));
             var host = new GameObject("SubnautiCraft");
             DontDestroyOnLoad(host);
             host.hideFlags = HideFlags.HideAndDontSave;
             host.AddComponent<SceneCleanerPreserve>(); // Subnautica's SceneCleaner destroys every other root object between menu and game
             host.AddComponent<Bridge>();
             Log.LogInfo($"{Name} {Version} loaded: start Minecraft with the SubnautiCraft mod; {ToggleKey.Value} switches between Steve and Ryley.");
+        }
+
+        /// <summary>
+        /// Every patch on its own: one that can't apply (another mod got there in an incompatible way, or the game
+        /// changed) costs only its own feature, logged, instead of stopping the whole plugin as PatchAll would.
+        /// </summary>
+        private static void PatchEach(Harmony harmony)
+        {
+            int failed = 0;
+            foreach (Type type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
+            {
+                try
+                {
+                    harmony.CreateClassProcessor(type).Patch();
+                }
+                catch (Exception e)
+                {
+                    failed++;
+                    Log.LogError($"patch {type.Name} couldn't apply, that part of SubnautiCraft is off: {e.GetBaseException().Message}");
+                }
+            }
+
+            if (failed > 0)
+            {
+                Log.LogWarning($"{failed} patches couldn't apply; everything else works");
+            }
         }
     }
 }

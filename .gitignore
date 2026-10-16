@@ -23,3 +23,8 @@ mesh_*.png
 .vscode/
 *.iml
 *.user
+
+# Release zips made for uploading (Nexus Mods)
+/*.zip
+tools/PatchCheck/bin/
+tools/PatchCheck/obj/

@@ -14,7 +14,7 @@ namespace SubnautiCraft
     {
         private static bool Prefix(Inventory __instance, Pickupable pickupable, ref bool __result)
         {
-            if (!Bridge.SteveEngaged || __instance != Inventory.main || pickupable == null || !Bridge.GiveToSteve(pickupable))
+            if (!Bridge.SteveEngaged || SteveTools.Taking || __instance != Inventory.main || pickupable == null || !Bridge.GiveToSteve(pickupable))
             {
                 return true;
             }
